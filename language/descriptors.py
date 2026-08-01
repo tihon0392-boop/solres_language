@@ -82,7 +82,7 @@ class DescriptorGrammar:
         if word.lower() in self.descriptions:
             primitive_words = self.descriptions[word.lower()]["ru"]
         else:
-            prim = self.primitives.get_by_ru(word)
+            prim = self.primitives.get_by_ru(word) or self.primitives.get_by_en(word)
             if prim:
                 primitive_words = [word]
             else:
@@ -94,11 +94,12 @@ class DescriptorGrammar:
         boundaries = []
 
         for pw in primitive_words:
-            prim = self.primitives.get_by_ru(pw)
+            prim = self.primitives.get_by_ru(pw) or self.primitives.get_by_en(pw)
             if prim:
                 movements = self._pattern_to_movements(prim["pattern"])
-
-                for semitones, direction in movements:
+                if movements:
+                    # Берём только первое движение
+                    semitones, direction = movements[0]
                     current_midi += direction * semitones
 
                     current_octave = (current_midi // 12) - 1
@@ -108,8 +109,7 @@ class DescriptorGrammar:
                         current_midi += 12
 
                     notes.append(self._midi_to_note(current_midi))
-
-                boundaries.append(len(notes) - 1)
+                    boundaries.append(len(notes) - 1)
 
         return notes, boundaries
 
