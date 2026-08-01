@@ -1,0 +1,18 @@
+{
+  "author": "Сообщество",
+  "description": "Добавить слово 'собака/dog' — животное",
+  "category": "word",
+  "created": "2026-08-01T03:07:22.208041",
+  "status": "proposed",
+  "votes_up": 1,
+  "votes_down": 0,
+  "data": {
+    "pattern": "MAJOR_THIRD_DOWN,MAJOR_SECOND_UP",
+    "meanings": [
+      "собака",
+      "dog",
+      "пёс",
+      "лаять"
+    ]
+  }
+}

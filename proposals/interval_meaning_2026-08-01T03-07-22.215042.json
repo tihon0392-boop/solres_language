@@ -1,0 +1,13 @@
+{
+  "author": "Исследователь",
+  "description": "Добавить значение 'технология' для PERFECT_FIFTH",
+  "category": "interval_meaning",
+  "created": "2026-08-01T03:07:22.215042",
+  "status": "proposed",
+  "votes_up": 0,
+  "votes_down": 1,
+  "data": {
+    "interval": "PERFECT_FIFTH",
+    "new_meaning": "технология, машина, компьютер"
+  }
+}

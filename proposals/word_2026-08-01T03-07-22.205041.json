@@ -1,0 +1,18 @@
+{
+  "author": "Создатель",
+  "description": "Добавить слово 'кошка/cat' — животное",
+  "category": "word",
+  "created": "2026-08-01T03:07:22.205041",
+  "status": "approved",
+  "votes_up": 2,
+  "votes_down": 0,
+  "data": {
+    "pattern": "MAJOR_THIRD_UP,MINOR_SECOND_UP",
+    "meanings": [
+      "кошка",
+      "cat",
+      "кот",
+      "мурлыкать"
+    ]
+  }
+}
