@@ -135,7 +135,7 @@ HTML = """
         </div>
         <div class="speed-control">
             Speed: <input type="range" id="speedSlider" min="0.5" max="2.5" step="0.1" value="1.0" 
-                   oninput="updateSpeedLabel()">
+                   oninput="updateSpeedLabel(); playAudio()">
             <span id="speedLabel">1.0x</span>
         </div>
         <div class="result" id="result">
@@ -177,25 +177,29 @@ HTML = """
         async function translateWord() {
             const word = document.getElementById('wordInput').value;
             if (!word) return;
-
+            
             const res = await fetch('/translate?word=' + encodeURIComponent(word) + '&mode=melody');
             const data = await res.json();
-
+            
             let descHTML = '';
             if (data.description) {
                 descHTML = '<div class="desc-display">Description: ' + data.description.join(' + ') + '</div>';
             }
-
+            
             document.getElementById('result').innerHTML = 
                 descHTML +
                 '<div class="notes-display">' + data.notes + '</div>' +
                 '<div class="meaning-display">' + data.meaning + '</div>';
-
+            
+            playAudio(word);
+        }
+        
+        async function playAudio(word) {
             const speed = document.getElementById('speedSlider').value;
-            const audioRes = await fetch('/play?word=' + encodeURIComponent(word) + '&mode=melody&speed=' + speed);
+            const audioRes = await fetch('/play?word=' + encodeURIComponent(word || document.getElementById('wordInput').value) + '&mode=melody&speed=' + speed);
             const audioBlob = await audioRes.blob();
             const audioUrl = URL.createObjectURL(audioBlob);
-
+            
             const player = document.getElementById('audioPlayer');
             player.style.display = 'block';
             player.src = audioUrl;
