@@ -6,36 +6,54 @@
 
 ---
 
+## 🌍 Why SolRes? The Universal Potential
+
+Music is the only language that needs no translation. A major third sounds "bright" to everyone — Russian, Chinese, African, child, elder. **The physics of sound is universal.** Seven notes exist in every culture. Intervals between them are mathematics — the same in every language, every country, every planet.
+
+SolRes harnesses this: **if you can hear, you can understand.** No dictionaries, no grammar drills — just melody.
+
+**Everyone can contribute.** Propose new words, vote on rules, suggest primitives. The language evolves through community consensus — not a single creator. This is a language for humanity, built by humanity.
+
+---
+
 ## 🇬🇧 English
 
-**SolRes** is a constructed language that encodes meaning through **musical intervals** rather than phonetic symbols.
+**SolRes** encodes meaning through **musical intervals** — distances between notes — instead of phonetics.
 
 **Creator**: Tikhon Shabanov | **License**: CC BY-SA 4.0 | **Date**: August 1, 2026
 
 ---
 
-### 🌐 Try It Online
+### 🌐 Try It Now
 
-Run locally:
-```bash
-python web_app.py
-```
-Then open **http://127.0.0.1:5000** — type a word, hear its melody. Switch between Melody and Chord mode.
+**Live site:** **[solres.onrender.com](https://solres.onrender.com)** — open on any device, no installation!
+
+Type a word → hear its melody. Works on phone, tablet, desktop.
 
 ---
 
 ### 🧠 How It Works
 
-1. **85 semantic primitives** (big, hot, bright, go, inside...) — each has a unique interval pattern
-2. **Words are descriptions**: "sun" = big + hot + bright + rise + above + good + day
-3. **Melodies are paths**: each primitive adds 2 notes, chained without repetition
+1. **120+ semantic primitives** (big, hot, bright, round, wooden...) — each with a unique interval pattern
+2. **Words = descriptions**: "sun" = big + hot + bright + rise + above + good + day
+3. **Melodies = paths**: one note per primitive, chained smoothly
 4. **Grammar**: fixed word order (size → physics → color → action → relation → value → time)
 
-| Word | Primitives | Melody |
-|------|-----------|--------|
-| ☀️ Sun | big+hot+bright+rise+above+good+day | DO→SOL→LA→SOL→LA→FA→SI→DO→FA→SI→LA→DO→RE→DO→FA |
-| 🌙 Moon | big+cold+bright+rise+above+good+night | DO→DO→DO→DO→DO→DO→SI→DO→DO→SI→LA→DO→RE→DO→DO |
-| 💧 Water | something+cold+bright+fall+inside+good+always | DO→DO→SOL→DO→SOL→DO→DO→DO→RE→SOL→RE→FA→SOL→DO→LA |
+| Word | Primitives | Melody (8 notes) |
+|------|-----------|------------------|
+| ☀️ Sun | big+hot+bright+rise+above+good+day | DO→SOL→FA→DO→RE→SOL→SI→LA |
+| 🌙 Moon | big+cold+bright+rise+above+good+night | DO→DO→DO→DO→DO→SI→DO→DO |
+| 💧 Water | something+cold+bright+fall+inside+good+always | DO→SOL→DO→DO→RE→RE→SOL→LA |
+
+---
+
+### 🌐 Why This Can Scale
+
+- **Notes are identical worldwide** — C is C in Russia, China, Brazil
+- **Intervals are physics** — a perfect fifth is 3:2 frequency ratio everywhere
+- **Community-driven** — anyone proposes words/primitives/rules via GitHub Discussions
+- **Open source** — CC BY-SA license: use, modify, share freely with attribution
+- **Platform-independent** — works in browser, exports to MIDI, can run on any device
 
 ---
 
@@ -43,9 +61,9 @@ Then open **http://127.0.0.1:5000** — type a word, hear its melody. Switch bet
 ```
 solres_language/
 ├── core/ # Notes, intervals, sound synthesis
-├── language/ # Primitives, descriptors, grammar, lexicon
-├── chords/ # Chord-based communication (3-note words)
-├── web/ # Flask web interface
+├── language/ # 120+ primitives, descriptors, grammar
+├── chords/ # Chord-based communication
+├── web/ # Flask web interface (mobile-friendly)
 ├── evolution/ # Community proposals, voting, version control
 ├── tests/ # Unit tests
 ├── utils/ # MIDI export
@@ -54,77 +72,91 @@ solres_language/
 
 ---
 
-### 🧬 Language Evolution
+### 🧬 Language Evolution — Built by Everyone
 
-SolRes is **alive**. Anyone can propose new words, rules, or primitives via GitHub Discussions.
+SolRes is **alive and community-owned**. Anyone can shape its future:
 
-1. **Propose** — create a discussion with tag `proposal`
-2. **Discuss** — community reviews and votes
-3. **Accept** — creator merges approved proposals
+1. **Propose** — new words, primitives, or grammar rules on GitHub Discussions
+2. **Discuss** — community reviews, refines, and votes
+3. **Accept** — top proposals are merged; old versions preserved in backups
 
-👉 **Join the discussion**: https://github.com/tihon0392-boop/solres_language/discussions
+👉 **Shape the language:** https://github.com/tihon0392-boop/solres_language/discussions
 
 ---
 
 ### 🔮 Roadmap
 
-- [x] Core engine (notes, intervals, synthesis)
-- [x] 85 semantic primitives
+- [x] Core engine (notes, intervals, sound synthesis)
+- [x] 120+ semantic primitives in 12 categories
 - [x] Descriptor grammar (words as descriptions)
-- [x] Chord mode (3-note words)
-- [x] Web interface (translate + play)
+- [x] Web interface with audio playback + speed control
 - [x] MIDI export (piano, violin, flute...)
-- [x] Evolution system (proposals, voting)
-- [ ] GitHub Discussions integration
-- [ ] Moderated proposal acceptance
-- [ ] Expanded primitives (200+)
-- [ ] Scientific paper (arXiv)
+- [x] Evolution system (proposals, voting, moderation)
+- [x] Live deployment (solres.onrender.com)
+- [ ] Scientific paper (arXiv cs.CL — pending endorsement)
+- [ ] Mobile app (React Native)
+- [ ] SolRes → color/gesture converter (for the deaf)
+- [ ] 500+ primitives, 1000+ described words
 
 ---
 
-### 📜 License
+### 📜 License & Authorship
 
-Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0)
+**Creator**: Tikhon Shabanov | **License**: CC BY-SA 4.0
 
-© 2026 Tikhon Shabanov
+✅ Free to use, modify, extend | ⚠️ Credit the author | ⚠️ Share alike
 
 ---
 
 ## 🇷🇺 Русский
 
-**Сольрес** — искусственный язык, кодирующий смысл через **музыкальные интервалы**.
+**Сольрес** — язык, кодирующий смысл через **музыкальные интервалы**. Нота До звучит одинаково в России, Китае, Африке. Квинта — это физика, а не культура. **Это язык, который понимают все.**
 
 **Создатель**: Тихон Шабанов | **Лицензия**: CC BY-SA 4.0 | **Дата**: 1 августа 2026
 
 ---
 
-### 🌐 Попробовать онлайн
+### 🌐 Откройте прямо сейчас
 
-Запустите локально:
-```bash
-python web_app.py
-```
-Откройте **http://127.0.0.1:5000** — введите слово, услышите мелодию. Переключайте режимы Мелодия/Аккорд.
+**Сайт:** **[solres.onrender.com](https://solres.onrender.com)** — работает на телефоне, планшете, компьютере.
+
+Введите слово → услышите мелодию. Никакой установки.
 
 ---
 
 ### 🧠 Как это работает
 
-1. **85 семантических примитивов** (большой, горячий, светлый, идти, внутри...)
+1. **120+ семантических примитивов** (большой, горячий, круглый, деревянный...) — у каждого уникальный интервальный паттерн
 2. **Слова = описания**: "солнце" = большой + горячий + светлый + подниматься + над + хороший + день
-3. **Мелодии = пути**: каждый примитив добавляет 2 ноты, цепочка без повторов
+3. **Мелодии = пути**: одна нота на примитив, плавная цепочка
 4. **Грамматика**: фиксированный порядок (размер → свойства → цвет → действие → отношение → оценка → время)
-
-| Слово | Примитивы | Мелодия |
-|-------|----------|---------|
-| ☀️ Солнце | большой+горячий+светлый+подниматься+над+хороший+день | DO→SOL→LA→SOL→LA→FA→SI→DO→FA→SI→LA→DO→RE→DO→FA |
-| 🌙 Луна | большой+холодный+светлый+подниматься+над+хороший+ночь | DO→DO→DO→DO→DO→DO→SI→DO→DO→SI→LA→DO→RE→DO→DO |
-| 💧 Вода | нечто+холодный+светлый+падать+внутри+хороший+всегда | DO→DO→SOL→DO→SOL→DO→DO→DO→RE→SOL→RE→FA→SOL→DO→LA |
 
 ---
 
-### 🧬 Эволюция языка
+### 🌍 Почему это взлетит
 
-Сольрес **живой**. Любой может предложить новые слова, правила или примитивы через GitHub Discussions.
+- **Ноты одинаковы во всём мире** — До везде До
+- **Интервалы — математика** — мажорная терция = 5:4 для всех культур
+- **Сообщество решает** — любой предлагает слова и правила через GitHub Discussions
+- **Открытый код** — лицензия CC BY-SA: используйте, меняйте, делитесь
+- **Работает везде** — браузер, телефон, MIDI-экспорт
 
-👉 **Обсуждения**: https://github.com/tihon0392-boop/solres_language/discussions
+---
+
+### 🧬 Эволюция языка — строим вместе
+
+Сольрес **живой**. Каждый может участвовать:
+
+1. **Предложить** — новое слово, примитив или правило
+2. **Обсудить** — сообщество голосует и улучшает
+3. **Принять** — лучшие предложения попадают в язык
+
+👉 **Участвовать:** https://github.com/tihon0392-boop/solres_language/discussions
+
+---
+
+### 📜 Лицензия и авторство
+
+**Создатель**: Тихон Шабанов | **Лицензия**: CC BY-SA 4.0
+
+✅ Свободное использование | ⚠️ Указывать автора | ⚠️ Делиться под той же лицензией

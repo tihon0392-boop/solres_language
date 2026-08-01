@@ -6,7 +6,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template_string, request, jsonify, send_file
 import numpy as np
-# sounddevice удалён — не нужен на сервере
 import io
 import wave as wave_module
 
@@ -45,24 +44,14 @@ def generate_wave(frequency, duration_ms, volume=0.3):
     return (wave_data * envelope * volume).astype(np.float32)
 
 
-def generate_word_wav(notes, mode='melody'):
+def generate_word_wav(notes, speed=1.0):
+    base_duration = int(400 / speed)
     combined = np.array([], dtype=np.float32)
-    if mode == 'chord':
-        num_samples = int(SAMPLE_RATE * 800 / 1000.0)
-        chord = np.zeros(num_samples, dtype=np.float32)
-        for note in notes:
-            w = generate_wave(note.to_frequency(), 800)
-            chord += w
-        max_val = np.max(np.abs(chord))
-        if max_val > 0.9:
-            chord = chord / max_val * 0.9
-        combined = chord
-    else:
-        silence = np.zeros(int(SAMPLE_RATE * 0.05), dtype=np.float32)
-        for i, note in enumerate(notes):
-            dur = 400 if i < len(notes) - 1 else 600
-            w = generate_wave(note.to_frequency(), dur)
-            combined = np.concatenate([combined, w, silence])
+    silence = np.zeros(int(SAMPLE_RATE * 0.03 / speed), dtype=np.float32)
+    for i, note in enumerate(notes):
+        dur = base_duration if i < len(notes) - 1 else int(600 / speed)
+        w = generate_wave(note.to_frequency(), dur)
+        combined = np.concatenate([combined, w, silence])
     audio_int16 = (combined * 32767).astype(np.int16)
     buf = io.BytesIO()
     with wave_module.open(buf, 'wb') as wf:
@@ -79,37 +68,51 @@ HTML = """
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SolRes — Universal Musical Language</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 750px; margin: 40px auto; 
-               padding: 20px; background: #0a0a1a; color: #e0e0e0; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 750px; margin: 20px auto; 
+               padding: 15px; background: #0a0a1a; color: #e0e0e0; font-size: 16px; }
         h1 { color: #ffd700; text-align: center; font-size: 2em; margin-bottom: 5px; }
-        .subtitle { text-align: center; color: #888; margin-bottom: 25px; }
-        .box { background: #1a1a2e; border-radius: 12px; padding: 25px; margin: 15px 0; }
-        .search-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-        input { flex: 1; min-width: 200px; padding: 12px; font-size: 16px; border-radius: 8px; 
+        .subtitle { text-align: center; color: #888; margin-bottom: 20px; font-size: 0.95em; }
+        .box { background: #1a1a2e; border-radius: 12px; padding: 20px; margin: 12px 0; }
+        .search-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        input { flex: 1; min-width: 180px; padding: 12px; font-size: 16px; border-radius: 8px; 
                 border: 2px solid #2a2a3e; background: #0d0d1a; color: #fff; }
         input:focus { border-color: #ffd700; outline: none; }
-        button { padding: 12px 20px; font-size: 16px; border-radius: 8px; border: none; 
+        button { padding: 12px 18px; font-size: 16px; border-radius: 8px; border: none; 
                  cursor: pointer; font-weight: bold; }
         .btn-translate { background: #ffd700; color: #000; }
         .btn-translate:hover { background: #ffed4a; }
-        .mode { display: flex; gap: 8px; margin-bottom: 12px; }
-        .mode button { background: #2a2a3e; color: #aaa; }
-        .mode button.active { background: #ffd700; color: #000; }
-        .result { margin-top: 20px; }
-        .notes-display { font-size: 22px; color: #ffd700; font-weight: bold; text-align: center; 
-                          margin: 12px 0; word-break: break-all; }
-        .desc-display { font-size: 15px; color: #aaa; text-align: center; margin-bottom: 8px; }
-        .meaning-display { font-size: 18px; color: #00ff88; text-align: center; }
+        .mode { margin-bottom: 12px; }
+        .mode span { color: #ffd700; font-weight: bold; }
+        .result { margin-top: 18px; }
+        .notes-display { font-size: 20px; color: #ffd700; font-weight: bold; text-align: center; 
+                          margin: 10px 0; word-break: break-all; }
+        .desc-display { font-size: 14px; color: #aaa; text-align: center; margin-bottom: 8px; }
+        .meaning-display { font-size: 17px; color: #00ff88; text-align: center; }
         .examples { color: #888; font-size: 14px; line-height: 2; }
         .examples span { color: #ffd700; cursor: pointer; }
         .examples span:hover { text-decoration: underline; }
-        audio { width: 100%; margin-top: 12px; }
-        .stats { display: flex; justify-content: center; gap: 30px; margin: 10px 0; 
-                 color: #888; font-size: 13px; }
+        audio { width: 100%; margin-top: 10px; }
+        .stats { display: flex; justify-content: center; gap: 25px; margin: 8px 0; 
+                 color: #888; font-size: 13px; flex-wrap: wrap; }
         .stats span { color: #ffd700; }
+        .speed-control { display: flex; align-items: center; gap: 8px; margin-top: 10px; 
+                         justify-content: center; color: #aaa; font-size: 14px; }
+        .speed-control input { width: 120px; min-width: 80px; padding: 6px; }
+        .speed-control span { color: #ffd700; }
+
+        @media (max-width: 500px) {
+            h1 { font-size: 1.4em; }
+            .notes-display { font-size: 15px; }
+            .search-row { flex-direction: column; }
+            input { width: 100%; }
+            button { width: 100%; }
+            .stats { flex-direction: column; gap: 5px; text-align: center; }
+            .speed-control { flex-wrap: wrap; }
+        }
     </style>
 </head>
 <body>
@@ -118,17 +121,22 @@ HTML = """
 
     <div class="stats">
         Primitives: <span>{{ primitives_count }}</span> | 
-        Descriptions: <span>{{ descriptions_count }}</span>
+        Words: <span>{{ descriptions_count }}</span>
     </div>
 
     <div class="box">
-                <div class="mode">
-            <span style="color:#ffd700;">🎶 Describe mode</span>
+        <div class="mode">
+            <span>🎶 Describe mode</span>
         </div>
         <div class="search-row">
             <input type="text" id="wordInput" placeholder="Enter a word: sun, love, home..." 
                    onkeypress="if(event.key==='Enter') translateWord()" />
             <button class="btn-translate" onclick="translateWord()">🔍 Translate</button>
+        </div>
+        <div class="speed-control">
+            Speed: <input type="range" id="speedSlider" min="0.5" max="2.5" step="0.1" value="1.0" 
+                   oninput="updateSpeedLabel()">
+            <span id="speedLabel">1.0x</span>
         </div>
         <div class="result" id="result">
             <div class="desc-display">Type a word to see its description and hear its melody</div>
@@ -156,15 +164,20 @@ HTML = """
     </div>
 
     <script>
+        function updateSpeedLabel() {
+            document.getElementById('speedLabel').textContent = 
+                document.getElementById('speedSlider').value + 'x';
+        }
+
         function quickSearch(word) {
             document.getElementById('wordInput').value = word;
             translateWord();
         }
-        
+
         async function translateWord() {
             const word = document.getElementById('wordInput').value;
             if (!word) return;
-            
+
             const res = await fetch('/translate?word=' + encodeURIComponent(word) + '&mode=melody');
             const data = await res.json();
 
@@ -178,7 +191,8 @@ HTML = """
                 '<div class="notes-display">' + data.notes + '</div>' +
                 '<div class="meaning-display">' + data.meaning + '</div>';
 
-            const audioRes = await fetch('/play?word=' + encodeURIComponent(word) + '&mode=melody');
+            const speed = document.getElementById('speedSlider').value;
+            const audioRes = await fetch('/play?word=' + encodeURIComponent(word) + '&mode=melody&speed=' + speed);
             const audioBlob = await audioRes.blob();
             const audioUrl = URL.createObjectURL(audioBlob);
 
@@ -205,29 +219,22 @@ def home():
 @app.route('/translate')
 def translate():
     word = request.args.get('word', '')
-    mode = request.args.get('mode', 'melody')
     tonic = Note(NoteName.DO, 4)
 
-    if mode == 'chord':
-        notes = chord_lex.meaning_to_chord(word, tonic)
-        meaning = chord_lex.notes_to_chord_meaning(notes)
-        description = []
+    description = descriptors.get_description(word)
+    if description:
+        notes, _ = descriptors.describe_to_notes(word, tonic)
+        meaning = [word]
     else:
-        description = descriptors.get_description(word)
-        if description:
-            notes, _ = descriptors.describe_to_notes(word, tonic)
-            meaning = [word]
+        prim = primitives.get_by_ru(word) or primitives.get_by_en(word)
+        if prim:
+            notes = descriptors.describe_to_notes(word, tonic)[0]
+            meaning = [prim["ru"], prim["en"]]
+            description = [prim["ru"]]
         else:
-            # Ищем как примитив
-            prim = primitives.get_by_ru(word) or primitives.get_by_en(word)
-            if prim:
-                notes = descriptors.describe_to_notes(word, tonic)[0]
-                meaning = [prim["ru"], prim["en"]]
-                description = [prim["ru"]]
-            else:
-                notes = [tonic]
-                meaning = ["not found"]
-                description = []
+            notes = [tonic]
+            meaning = ["not found"]
+            description = []
 
     SHARP_SEMITONES = {1, 3, 6, 8, 10}
     note_names = []
@@ -247,15 +254,11 @@ def translate():
 @app.route('/play')
 def play():
     word = request.args.get('word', '')
-    mode = request.args.get('mode', 'melody')
+    speed = float(request.args.get('speed', '1.0'))
     tonic = Note(NoteName.DO, 4)
 
-    if mode == 'chord':
-        notes = chord_lex.meaning_to_chord(word, tonic)
-    else:
-        notes, _ = descriptors.describe_to_notes(word, tonic)
-
-    wav_buf = generate_word_wav(notes, mode)
+    notes, _ = descriptors.describe_to_notes(word, tonic)
+    wav_buf = generate_word_wav(notes, speed)
     return send_file(wav_buf, mimetype='audio/wav')
 
 
