@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template_string, request, jsonify, send_file
 import numpy as np
-import sounddevice as sd
+# sounddevice удалён — не нужен на сервере
 import io
 import wave as wave_module
 

@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: solres
+    runtime: python
+    buildCommand: pip install flask numpy
+    startCommand: python web/app.py
