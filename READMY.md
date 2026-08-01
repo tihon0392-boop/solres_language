@@ -26,7 +26,7 @@ SolRes harnesses this: **if you can hear, you can understand.** No dictionaries,
 
 ### 🌐 Try It Now
 
-**Live site:** **[solres.onrender.com](https://solres.onrender.com)** — open on any device, no installation!
+**Live site:** **[79.137.197.83:5000](http://79.137.197.83:5000)** — open on any device, no installation!
 
 Type a word → hear its melody. Works on phone, tablet, desktop.
 
@@ -118,7 +118,7 @@ SolRes is **alive and community-owned**. Anyone can shape its future:
 
 ### 🌐 Откройте прямо сейчас
 
-**Сайт:** **[solres.onrender.com](https://solres.onrender.com)** — работает на телефоне, планшете, компьютере.
+**Сайт:** **[79.137.197.83:5000](http://79.137.197.83:5000)** — работает на телефоне, планшете, компьютере.
 
 Введите слово → услышите мелодию. Никакой установки.
 

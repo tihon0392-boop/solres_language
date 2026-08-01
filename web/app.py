@@ -271,6 +271,7 @@ if __name__ == '__main__':
     print("🌐 SolRes Web App")
     print(f"   Primitives: {primitives.total_count()}")
     print(f"   Descriptions: {len(descriptors.descriptions)}")
+    print(f"   Server: http://79.137.197.83:5000")
     print("=" * 50)
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
