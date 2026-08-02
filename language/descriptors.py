@@ -284,7 +284,9 @@ class DescriptorGrammar:
                 movements = self._pattern_to_movements(prim["pattern"])
                 if movements:
                     semitones, direction = movements[0]
-                    current_midi += direction * semitones
+                    # Ограничиваем скачок 2-4 полутонами для плавности
+                    step = max(2, min(4, semitones))
+                    current_midi += direction * step
 
                     current_octave = (current_midi // 12) - 1
                     if current_octave > base_octave + 1:
@@ -374,26 +376,20 @@ class DescriptorGrammar:
 
 
 if __name__ == "__main__":
+    from core.synthesizer import Synthesizer
+    from core.constants import NoteName
+    from core.interval_calculator import Note
+
     dg = DescriptorGrammar()
+    synth = Synthesizer(volume=0.25)
 
-    print("=" * 60)
-    print("✅ ВАЛИДАЦИЯ ПОРЯДКА ПРИМИТИВОВ")
-    print("=" * 60)
+    print("=" * 50)
+    print("🎵 ТЕСТ МЕЛОДИЙ (С ОГРАНИЧЕНИЕМ СКАЧКОВ)")
+    print("=" * 50)
 
-    tests = [
-        (["большой", "горячий", "светлый"], "Правильный порядок"),
-        (["горячий", "большой", "светлый"], "Неправильный (физика перед размером)"),
-        (["красивый", "большой"], "Неправильный (оценка перед размером)"),
-        (["холодный", "мокрый", "падать"], "Правильный (пропущены категории)"),
-        (["падать", "холодный"], "Неправильный (действие перед физикой)"),
-    ]
+    words = ["солнце", "вода", "кошка", "любовь", "зима"]
 
-    print("\n" + "=" * 60)
-    print("🇬🇧 АНГЛИЙСКИЕ СЛОВА")
-    print("=" * 60)
-
-    for word in ["sun", "moon", "water", "cat", "love", "winter"]:
-        desc = dg.get_description_en(word)
+    for word in words:
         notes, _ = dg.describe_to_notes(word)
         SHARP = {1, 3, 6, 8, 10}
         note_names = []
@@ -401,14 +397,6 @@ if __name__ == "__main__":
             midi = n.to_midi()
             sharp = "♯" if midi % 12 in SHARP else ""
             note_names.append(f"{n.name.name}{sharp}{n.octave}")
-        print(f"  {word} → {desc}")
 
-    for words, desc in tests:
-        result = dg.validate_order(words)
-        status = "✅" if result["valid"] else "❌"
-        print(f"\n{status} {desc}")
-        print(f"   Ввод: {words}")
-        if result["errors"]:
-            for e in result["errors"]:
-                print(f"   Ошибка: {e}")
-        print(f"   Правильный порядок: {result['correct_order']}")
+        print(f"\n{word}: {' → '.join(note_names)}")
+        synth.play_sequence([(n, 350) for n in notes], "piano")
