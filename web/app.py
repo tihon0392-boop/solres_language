@@ -47,13 +47,43 @@ def midi_to_frequency(midi: int) -> float:
     return 440.0 * (2 ** ((midi - 69) / 12))
 
 
-def generate_wave(frequency, duration_ms, volume=0.3):
+def generate_wave(frequency, duration_ms, volume=0.3, instrument='piano'):
     num_samples = int(SAMPLE_RATE * duration_ms / 1000.0)
     t = np.linspace(0, duration_ms / 1000.0, num_samples, False)
-    wave_data = (np.sin(2 * np.pi * frequency * t) * 1.0 + np.sin(2 * np.pi * frequency * 2 * t) * 0.5 + np.sin(2 * np.pi * frequency * 3 * t) * 0.25 + np.sin(2 * np.pi * frequency * 4 * t) * 0.125)
-    decay = np.exp(-3.0 * t / (duration_ms / 1000.0))
-    wave_data *= decay
-    attack = int(num_samples * 0.01); release = int(num_samples * 0.05)
+
+    if instrument == 'piano':
+        wave_data = (
+                np.sin(2 * np.pi * frequency * t) * 1.0 +
+                np.sin(2 * np.pi * frequency * 2 * t) * 0.5 +
+                np.sin(2 * np.pi * frequency * 3 * t) * 0.25 +
+                np.sin(2 * np.pi * frequency * 4 * t) * 0.125
+        )
+        decay = np.exp(-3.0 * t / (duration_ms / 1000.0))
+        wave_data *= decay
+    elif instrument == 'violin':
+        vibrato = 1 + 0.005 * np.sin(2 * np.pi * 5.5 * t)
+        wave_data = np.sin(2 * np.pi * frequency * t * vibrato)
+        wave_data += np.sin(2 * np.pi * frequency * 2 * t) * 0.3
+        attack = int(num_samples * 0.1)
+        wave_data[:attack] *= np.linspace(0, 1, attack)
+    elif instrument == 'flute':
+        wave_data = np.sin(2 * np.pi * frequency * t) * 1.0
+        wave_data += np.sin(2 * np.pi * frequency * 2 * t) * 0.2
+        wave_data += np.sin(2 * np.pi * frequency * 3 * t) * 0.1
+    elif instrument == 'organ':
+        wave_data = (
+                np.sin(2 * np.pi * frequency * t) * 1.0 +
+                np.sin(2 * np.pi * frequency * 2 * t) * 0.7 +
+                np.sin(2 * np.pi * frequency * 3 * t) * 0.5 +
+                np.sin(2 * np.pi * frequency * 4 * t) * 0.3 +
+                np.sin(2 * np.pi * frequency * 5 * t) * 0.2 +
+                np.sin(2 * np.pi * frequency * 6 * t) * 0.1
+        )
+    else:
+        wave_data = np.sin(2 * np.pi * frequency * t)
+
+    attack = int(num_samples * 0.01);
+    release = int(num_samples * 0.05)
     envelope = np.ones(num_samples)
     if attack > 1: envelope[:attack] = np.linspace(0, 1, attack)
     if release > 1: envelope[-release:] = np.linspace(1, 0, release)
@@ -259,7 +289,12 @@ HTML = r"""
                 <span style="color:var(--accent);font-weight:600;min-width:70px;text-align:center;" id="pianoRangeLabel">C3 – B4</span>
                 <button class="btn btn-sm" onclick="pianoShiftOctave(1)">▶</button>
                 <label style="margin-left:12px;">Instrument:</label>
-                <select id="instrumentSelect"><option value="piano">🎹 Piano</option></select>
+                <select id="instrumentSelect" onchange="instrumentChanged()">
+                    <option value="piano">🎹 Piano</option>
+                    <option value="violin">🎻 Violin</option>
+                    <option value="flute">🎵 Flute</option>
+                    <option value="organ">🎛️ Organ</option>
+                </select>
             </div>
             <div class="piano-sequence" id="pianoSequence">Click keys to record a melody...</div>
             <div class="piano-container"><div class="piano" id="piano"></div></div>
@@ -399,27 +434,31 @@ HTML = r"""
         function buildPiano() { const piano = document.getElementById('piano'); piano.innerHTML = ''; const startMidi = (pianoOctave + 1) * 12; const WHITE_W = 36, BLACK_W = 20; const whiteSemitones = [0,2,4,5,7,9,11]; for (let oct = 0; oct < 2; oct++) { for (let w = 0; w < 7; w++) { const midi = startMidi + oct*12 + whiteSemitones[w]; const noteIdx = midi % 12, octave = Math.floor(midi/12)-1; const key = document.createElement('div'); key.className = 'white-key'; key.style.left = (oct*7 + w)*WHITE_W + 'px'; key.textContent = NOTE_NAMES[noteIdx].split('/')[0] + octave; key.dataset.midi = midi; key.onclick = () => pianoKeyClick(midi, NOTE_NAMES[noteIdx].split('/')[0] + octave); piano.appendChild(key); } } const blackPositions = [{wi:0, mo:1},{wi:1, mo:3},{wi:3, mo:6},{wi:4, mo:8},{wi:5, mo:10}]; for (let oct = 0; oct < 2; oct++) { for (let bp of blackPositions) { const midi = startMidi + oct*12 + bp.mo; const noteIdx = midi % 12, octave = Math.floor(midi/12)-1; const key = document.createElement('div'); key.className = 'black-key'; key.style.left = ((oct*7 + bp.wi)*WHITE_W + WHITE_W - BLACK_W/2) + 'px'; key.textContent = NOTE_NAMES[noteIdx]; key.dataset.midi = midi; key.onclick = (e) => { e.stopPropagation(); pianoKeyClick(midi, NOTE_NAMES[noteIdx].split('/')[0] + octave); }; piano.appendChild(key); } } updatePianoRangeLabel(); }
         function updatePianoRangeLabel() { const startMidi = (pianoOctave + 1) * 12; const s = NOTE_NAMES[startMidi%12].split('/')[0] + (Math.floor(startMidi/12)-1); const e = NOTE_NAMES[(startMidi+23)%12].split('/')[0] + (Math.floor((startMidi+23)/12)-1); document.getElementById('pianoRangeLabel').textContent = s + ' – ' + e; }
         function pianoShiftOctave(dir) { pianoOctave += dir; if (pianoOctave < 0) pianoOctave = 0; if (pianoOctave > 5) pianoOctave = 5; buildPiano(); }
-        async function pianoKeyClick(midi, noteName) { pianoSequence.push({midi, noteName}); updatePianoSequenceDisplay(); const keys = document.querySelectorAll('#piano div[data-midi="' + midi + '"]'); keys.forEach(k => k.classList.add('active')); setTimeout(() => keys.forEach(k => k.classList.remove('active')), 300); const r = await fetch('/piano_note?midi=' + midi); new Audio(URL.createObjectURL(await r.blob())).play(); }
+        async function pianoKeyClick(midi, noteName) { pianoSequence.push({midi, noteName}); updatePianoSequenceDisplay(); const keys = document.querySelectorAll('#piano div[data-midi="' + midi + '"]'); keys.forEach(k => k.classList.add('active')); setTimeout(() => keys.forEach(k => k.classList.remove('active')), 300); const r = await fetch('/piano_note?midi=' + midi + '&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await r.blob())).play(); }
         function updatePianoSequenceDisplay() { const div = document.getElementById('pianoSequence'); if (pianoSequence.length === 0) { div.textContent = 'Click keys to record a melody...'; div.style.color = 'var(--muted)'; } else { div.innerHTML = pianoSequence.map((s, i) => { const prev = i > 0 ? pianoSequence[i-1] : null; let interval = ''; if (prev) { const diff = s.midi - prev.midi; interval = `<span style="color:var(--muted);font-size:0.7em;"> [${diff>0?'+':''}${diff}]</span>`; } return `<span style="color:var(--accent2);cursor:pointer;" onclick="pianoRemoveNote(${i})" title="Click to remove">${s.noteName}</span>${interval}`; }).join(' → '); div.style.color = ''; } }
         function pianoUndoLastNote() { pianoSequence.pop(); updatePianoSequenceDisplay(); }
         function pianoRemoveNote(idx) { pianoSequence.splice(idx, 1); updatePianoSequenceDisplay(); }
-        async function pianoPlaySequence() { if (pianoSequence.length === 0) return; const midis = pianoSequence.map(s => s.midi); for (let i = 0; i < midis.length; i++) { setTimeout(() => { const keys = document.querySelectorAll('#piano div[data-midi="' + midis[i] + '"]'); keys.forEach(k => k.classList.add('active')); setTimeout(() => keys.forEach(k => k.classList.remove('active')), 350); }, i * 400 / getSpeed('pianoSpeed')); } const r = await fetch('/piano_play?notes=' + encodeURIComponent(midis.join(',')) + '&speed=' + getSpeed('pianoSpeed')); const p = document.getElementById('pianoAudio'); p.style.display = 'block'; p.src = URL.createObjectURL(await r.blob()); p.play(); analyzeIntervals(midis); }
+        async function pianoPlaySequence() { if (pianoSequence.length === 0) return; const midis = pianoSequence.map(s => s.midi); for (let i = 0; i < midis.length; i++) { setTimeout(() => { const keys = document.querySelectorAll('#piano div[data-midi="' + midis[i] + '"]'); keys.forEach(k => k.classList.add('active')); setTimeout(() => keys.forEach(k => k.classList.remove('active')), 350); }, i * 400 / getSpeed('pianoSpeed')); } const r = await fetch('/piano_play?notes=' + encodeURIComponent(midis.join(',')) + '&speed=' + getSpeed('pianoSpeed') + '&instrument=' + currentInstrument); const p = document.getElementById('pianoAudio'); p.style.display = 'block'; p.src = URL.createObjectURL(await r.blob()); p.play(); analyzeIntervals(midis); }
         async function analyzeIntervals(midis) { if (midis.length < 2) return; const intervals = []; for (let i = 1; i < midis.length; i++) intervals.push(midis[i] - midis[i-1]); const r = await fetch('/analyze?intervals=' + encodeURIComponent(intervals.join(','))); const data = await r.json(); lastAnalysis = data; let html = '<table class="analysis-table"><thead><tr><th>Note</th><th>Interval</th><th>Primitive</th></tr></thead><tbody>'; for (let i = 0; i < intervals.length; i++) { const diff = intervals[i], a = data.results[i], found = a && a.found; html += `<tr><td>${pianoSequence[i+1].noteName}</td><td class="${found?'found':'not-found'}">${diff>0?'+':''}${diff}</td><td class="${found?'found':'not-found'}">${found ? a.ru + ' (' + a.en + ')' : '—'}</td></tr>`; } html += '</tbody></table>'; if (data.word_found) html += `<div class="meaning" style="margin-top:8px;">✅ Word: <strong>${data.word_found}</strong></div>`; else if (data.all_found) html += `<div class="desc-row" style="margin-top:8px;">Primitives: ${data.primitives_ru.join(' + ')}</div>`; else html += `<div class="error-msg" style="margin-top:8px;">Some intervals not found.</div>`; html += `<div style="text-align:center;margin-top:8px;"><button class="btn btn-sm" onclick="savePianoAsWord()">💾 Save as My Word</button></div>`; document.getElementById('pianoAnalysis').innerHTML = html; }
         function savePianoAsWord() { if (!lastAnalysis || !lastAnalysis.primitives_ru || lastAnalysis.primitives_ru.length < 2) return; const name = prompt('Word name:', 'piano_' + Date.now()); if (!name) return; const myWords = getMyWords(); myWords.push({name, primitives: lastAnalysis.primitives_ru, source: '🎹 Instruments', created: new Date().toISOString()}); saveMyWords(myWords); document.getElementById('pianoSaveArea').innerHTML = '<div class="success-msg">Saved: ' + name + '</div>'; }
         function pianoClearSequence() { pianoSequence = []; updatePianoSequenceDisplay(); document.getElementById('pianoAudio').style.display = 'none'; document.getElementById('pianoAnalysis').innerHTML = ''; document.getElementById('pianoSaveArea').innerHTML = ''; lastAnalysis = null; }
         function pianoToCompose() { if (pianoSequence.length < 2) return; const intervals = []; for (let i = 1; i < pianoSequence.length; i++) intervals.push(pianoSequence[i].midi - pianoSequence[i-1].midi); switchTab('compose'); document.getElementById('composeError').innerHTML = `<div style="color:var(--accent);text-align:center;margin-top:10px;">Intervals from Piano: ${intervals.map(i=>(i>0?'+':'')+i).join(', ')}</div>`; }
+        let currentInstrument = 'piano';
+        function instrumentChanged() {
+            currentInstrument = document.getElementById('instrumentSelect').value;
+        }
         buildPiano();
 
         // === MY WORDS ===
         function loadMyWords() { const words = getMyWords(); let html = ''; words.forEach((w, i) => { html += `<tr><td>${w.name}</td><td>${(w.primitives||[]).join(', ')}</td><td><span class="badge ${w.source==='📖 System'?'badge-system':'badge-user'}">${w.source||'?'}</span></td><td><button class="btn-sm" onclick="playMyWord(${i})">▶</button></td><td><button class="btn-sm" onclick="publishMyWord(${i})" title="Publish">🌐</button></td><td><button class="btn-sm btn-danger" onclick="deleteMyWord(${i})">✕</button></td></tr>`; }); document.querySelector('#myWordsTable tbody').innerHTML = html || '<tr><td colspan="6" style="text-align:center;color:var(--muted);">No saved words yet.</td></tr>'; }
-        async function playMyWord(idx) { const words = getMyWords(); if (!words[idx]) return; const ar = await fetch('/compose_play?words=' + encodeURIComponent((words[idx].primitives||[]).join(',')) + '&speed=' + getSpeed('mywordsSpeed')); new Audio(URL.createObjectURL(await ar.blob())).play(); }
+        async function playMyWord(idx) { const words = getMyWords(); if (!words[idx]) return; const ar = await fetch('/compose_play?words=' + encodeURIComponent((words[idx].primitives||[]).join(',')) + '&speed=' + getSpeed('mywordsSpeed') + '&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
         async function publishMyWord(idx) { const words = getMyWords(); if (!words[idx]) return; const w = words[idx]; const author = prompt('Your name (or leave empty for anonymous):', '') || 'Anonymous'; await fetch('/shared/words/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: w.name, primitives: w.primitives, source: w.source, created: w.created, author: author}) }); alert('Published: ' + w.name); }
         function deleteMyWord(idx) { const words = getMyWords(); words.splice(idx, 1); saveMyWords(words); loadMyWords(); }
         function clearMyWords() { if (confirm('Delete all?')) { saveMyWords([]); loadMyWords(); } }
 
         // === COMMUNITY ===
         async function loadCommunityWords() { const r = await fetch('/shared/words'); const words = await r.json(); let html = ''; words.forEach(w => { html += `<tr><td>${w.name}</td><td>${(w.primitives||[]).join(', ')}</td><td><span class="badge badge-community">${w.author||'Anonymous'}</span></td><td><button class="btn-sm" onclick="playCommunityWord('${(w.primitives||[]).join(',')}')">▶</button></td></tr>`; }); document.querySelector('#communityTable tbody').innerHTML = html || '<tr><td colspan="4" style="text-align:center;color:var(--muted);">No community words yet. Be the first to publish!</td></tr>'; }
-        async function playCommunityWord(primitives) { const ar = await fetch('/compose_play?words=' + encodeURIComponent(primitives) + '&speed=1.0'); new Audio(URL.createObjectURL(await ar.blob())).play(); }
+        async function playCommunityWord(primitives) { const ar = await fetch('/compose_play?words=' + encodeURIComponent(primitives) + '&speed=1.0&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
 
         // === SENTENCES ===
         function getAllWordsForSelect() { const myWords = getMyWords(); const dictWords = Object.entries(DICTIONARY_WORDS).map(([name, data]) => ({name, primitives: data.ru, source: '📖 System'})); return [...dictWords, ...myWords]; }
@@ -431,8 +470,8 @@ HTML = r"""
 
         // === TEXT ===
         function loadText() { const sentences = getSentences(); const container = document.getElementById('textList'); if (sentences.length === 0) { container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;">No saved sentences yet.</div>'; return; } container.innerHTML = sentences.map((s, i) => `<div class="sentence-row" draggable="true" data-idx="${i}"><span class="drag-handle" draggable="true">⋮⋮</span><span style="flex:1;">${s.name}: ${(s.words||[]).join(', ')}</span><button class="btn-sm" onclick="playTextSentence(${i})">▶</button><button class="btn-sm btn-danger" onclick="deleteTextSentence(${i})">✕</button></div>`).join(''); container.querySelectorAll('.sentence-row').forEach(row => { row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', row.dataset.idx); row.classList.add('dragging'); }); row.addEventListener('dragend', () => row.classList.remove('dragging')); row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag-over'); }); row.addEventListener('dragleave', () => row.classList.remove('drag-over')); row.addEventListener('drop', (e) => { e.preventDefault(); row.classList.remove('drag-over'); const from = parseInt(e.dataTransfer.getData('text/plain')); const to = parseInt(row.dataset.idx); if (from !== to && !isNaN(from) && !isNaN(to)) { const s = getSentences(); const [moved] = s.splice(from, 1); s.splice(to, 0, moved); saveSentences(s); loadText(); } }); }); }
-        async function playText() { const sentences = getSentences(); if (sentences.length === 0) return; const allWords = getAllWordsForSelect(); for (const s of sentences) { const words = s.words.map(name => allWords.find(w => w.name === name)).filter(Boolean); if (words.length === 0) continue; const allPrims = words.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed')); const a = new Audio(URL.createObjectURL(await ar.blob())); a.play(); await new Promise(r => { a.onended = r; setTimeout(r, 5000); }); } }
-        async function playTextSentence(idx) { const sentences = getSentences(); if (!sentences[idx]) return; const allWords = getAllWordsForSelect(); const words = sentences[idx].words.map(name => allWords.find(w => w.name === name)).filter(Boolean); if (words.length === 0) return; const allPrims = words.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed')); new Audio(URL.createObjectURL(await ar.blob())).play(); }
+        async function playText() { const sentences = getSentences(); if (sentences.length === 0) return; const allWords = getAllWordsForSelect(); for (const s of sentences) { const words = s.words.map(name => allWords.find(w => w.name === name)).filter(Boolean); if (words.length === 0) continue; const allPrims = words.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed') + '&instrument=' + currentInstrument); const a = new Audio(URL.createObjectURL(await ar.blob())); a.play(); await new Promise(r => { a.onended = r; setTimeout(r, 5000); }); } }
+        async function playTextSentence(idx) { const sentences = getSentences(); if (!sentences[idx]) return; const allWords = getAllWordsForSelect(); const words = sentences[idx].words.map(name => allWords.find(w => w.name === name)).filter(Boolean); if (words.length === 0) return; const allPrims = words.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed') + '&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
         function deleteTextSentence(idx) { const s = getSentences(); s.splice(idx, 1); saveSentences(s); loadText(); }
         function clearText() { if (confirm('Delete all?')) { saveSentences([]); loadText(); } }
         
@@ -454,7 +493,7 @@ HTML = r"""
     
 
     <!-- TUTORIAL OVERLAY -->
-    <div id="tutorialOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; align-items:center; justify-content:center;">
+    <div id="tutorialOverlay" style=" position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; align-items:center; justify-content:center;">
         <div style="background:var(--surface); border:1px solid var(--accent); border-radius:16px; padding:30px; max-width:500px; text-align:center; margin:20px;">
             <h2 style="color:var(--accent); margin-bottom:16px;">🎵 Welcome to SolRes!</h2>
             <div style="text-align:left; line-height:2; font-size:0.9em; color:var(--text);">
@@ -573,6 +612,7 @@ def compose():
 @app.route('/compose_play')
 def compose_play():
     words = [w.strip() for w in request.args.get('words', '').split(',') if w.strip()]
+    instrument = request.args.get('instrument', 'piano')
     result = descriptors.validate_order(words)
     tonic = Note(NoteName.DO, 4); notes = [tonic]; cm = tonic.to_midi(); bo = 4
     for pw in result["correct_order"]:
@@ -585,18 +625,56 @@ def compose_play():
                 if co > bo + 1: cm -= 12
                 elif co < bo - 1: cm += 12
                 notes.append(descriptors._midi_to_note(cm))
-    return send_file(generate_word_wav(notes, float(request.args.get('speed', '1.0'))), mimetype='audio/wav')
+    speed = float(request.args.get('speed', '1.0'))
+    base_duration = int(400 / speed)
+    combined = np.array([], dtype=np.float32)
+    silence = np.zeros(int(SAMPLE_RATE * 0.03 / speed), dtype=np.float32)
+    for i, note in enumerate(notes):
+        dur = base_duration if i < len(notes) - 1 else int(600 / speed)
+        w = generate_wave(note.to_frequency(), dur, instrument=instrument)
+        combined = np.concatenate([combined, w, silence])
+    audio_int16 = (combined * 32767).astype(np.int16)
+    buf = io.BytesIO()
+    with wave_module.open(buf, 'wb') as wf:
+        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
+        wf.writeframes(audio_int16.tobytes())
+    buf.seek(0)
+    return send_file(buf, mimetype='audio/wav')
 
 
 @app.route('/piano_note')
 def piano_note():
-    return send_file(generate_note_wav(int(request.args.get('midi', 60))), mimetype='audio/wav')
+    midi = int(request.args.get('midi', 60))
+    instrument = request.args.get('instrument', 'piano')
+    w = generate_wave(midi_to_frequency(midi), 400, instrument=instrument)
+    audio_int16 = (w * 32767).astype(np.int16)
+    buf = io.BytesIO()
+    with wave_module.open(buf, 'wb') as wf:
+        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
+        wf.writeframes(audio_int16.tobytes())
+    buf.seek(0)
+    return send_file(buf, mimetype='audio/wav')
 
 
 @app.route('/piano_play')
 def piano_play():
-    return send_file(generate_midi_wav([int(n) for n in request.args.get('notes', '').split(',') if n.strip()], float(request.args.get('speed', '1.0'))), mimetype='audio/wav')
-
+    midi_notes = [int(n) for n in request.args.get('notes', '').split(',') if n.strip()]
+    instrument = request.args.get('instrument', 'piano')
+    speed = float(request.args.get('speed', '1.0'))
+    base_duration = int(400 / speed)
+    combined = np.array([], dtype=np.float32)
+    silence = np.zeros(int(SAMPLE_RATE * 0.03 / speed), dtype=np.float32)
+    for i, midi in enumerate(midi_notes):
+        dur = base_duration if i < len(midi_notes) - 1 else int(600 / speed)
+        w = generate_wave(midi_to_frequency(midi), dur, instrument=instrument)
+        combined = np.concatenate([combined, w, silence])
+    audio_int16 = (combined * 32767).astype(np.int16)
+    buf = io.BytesIO()
+    with wave_module.open(buf, 'wb') as wf:
+        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
+        wf.writeframes(audio_int16.tobytes())
+    buf.seek(0)
+    return send_file(buf, mimetype='audio/wav')
 
 @app.route('/analyze')
 def analyze():
