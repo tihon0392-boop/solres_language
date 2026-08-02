@@ -245,6 +245,12 @@ HTML = r"""
         <header><div class="logo">🎵 SolRes</div><p class="subtitle">Universal musical language</p></header>
         <div class="top-row">
             <div class="stats"><div>Primitives <span>{{ primitives_count }}</span></div><div>Words <span>{{ descriptions_count }}</span></div></div>
+            <select id="globalInstrument" onchange="currentInstrument=this.value" style="padding:6px 10px;font-size:0.75em;border-radius:18px;background:var(--surface2);color:var(--text);border:1px solid rgba(255,255,255,0.08);margin-right:8px;">
+                <option value="piano">🎹 Piano</option>
+                <option value="violin">🎻 Violin</option>
+                <option value="flute">🎵 Flute</option>
+                <option value="organ">🎛️ Organ</option>
+            </select>
             <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☀️ Light</button>
         </div>
         <div class="tabs">
@@ -443,7 +449,7 @@ HTML = r"""
         function savePianoAsWord() { if (!lastAnalysis || !lastAnalysis.primitives_ru || lastAnalysis.primitives_ru.length < 2) return; const name = prompt('Word name:', 'piano_' + Date.now()); if (!name) return; const myWords = getMyWords(); myWords.push({name, primitives: lastAnalysis.primitives_ru, source: '🎹 Instruments', created: new Date().toISOString()}); saveMyWords(myWords); document.getElementById('pianoSaveArea').innerHTML = '<div class="success-msg">Saved: ' + name + '</div>'; }
         function pianoClearSequence() { pianoSequence = []; updatePianoSequenceDisplay(); document.getElementById('pianoAudio').style.display = 'none'; document.getElementById('pianoAnalysis').innerHTML = ''; document.getElementById('pianoSaveArea').innerHTML = ''; lastAnalysis = null; }
         function pianoToCompose() { if (pianoSequence.length < 2) return; const intervals = []; for (let i = 1; i < pianoSequence.length; i++) intervals.push(pianoSequence[i].midi - pianoSequence[i-1].midi); switchTab('compose'); document.getElementById('composeError').innerHTML = `<div style="color:var(--accent);text-align:center;margin-top:10px;">Intervals from Piano: ${intervals.map(i=>(i>0?'+':'')+i).join(', ')}</div>`; }
-        let currentInstrument = 'piano';
+                let theme = 'dark', currentWord = '', pianoOctave = 3, pianoSequence = [], lastAnalysis = null, currentInstrument = 'piano';
         function instrumentChanged() {
             currentInstrument = document.getElementById('instrumentSelect').value;
         }
