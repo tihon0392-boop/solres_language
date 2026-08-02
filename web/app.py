@@ -435,9 +435,42 @@ HTML = r"""
         async function playTextSentence(idx) { const sentences = getSentences(); if (!sentences[idx]) return; const allWords = getAllWordsForSelect(); const words = sentences[idx].words.map(name => allWords.find(w => w.name === name)).filter(Boolean); if (words.length === 0) return; const allPrims = words.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed')); new Audio(URL.createObjectURL(await ar.blob())).play(); }
         function deleteTextSentence(idx) { const s = getSentences(); s.splice(idx, 1); saveSentences(s); loadText(); }
         function clearText() { if (confirm('Delete all?')) { saveSentences([]); loadText(); } }
+        
+        // === TUTORIAL ===
+        function showTutorial() {
+            const seen = localStorage.getItem('solres_tutorial_seen');
+            if (!seen) {
+                document.getElementById('tutorialOverlay').style.display = 'flex';
+            }
+        }
+        function closeTutorial() {
+            document.getElementById('tutorialOverlay').style.display = 'none';
+            localStorage.setItem('solres_tutorial_seen', '1');
+        }
+        showTutorial();
 
         loadSentenceRows();
     </script>
+    
+
+    <!-- TUTORIAL OVERLAY -->
+    <div id="tutorialOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; align-items:center; justify-content:center;">
+        <div style="background:var(--surface); border:1px solid var(--accent); border-radius:16px; padding:30px; max-width:500px; text-align:center; margin:20px;">
+            <h2 style="color:var(--accent); margin-bottom:16px;">🎵 Welcome to SolRes!</h2>
+            <div style="text-align:left; line-height:2; font-size:0.9em; color:var(--text);">
+                <p>🔍 <b>Translate</b> — type a word, hear its melody</p>
+                <p>🧩 <b>Compose</b> — build words from 135+ primitives</p>
+                <p>🎸 <b>Instruments</b> — play piano, analyze intervals</p>
+                <p>📝 <b>My Words</b> — save your custom words</p>
+                <p>🌐 <b>Community</b> — explore words from others</p>
+                <p>💬 <b>Sentences</b> — chain words together</p>
+                <p>📄 <b>Text</b> — build text from sentences</p>
+                <p>⚡ <b>Speed slider</b> — adjust playback speed</p>
+                <p>☀️ <b>Theme toggle</b> — switch dark/light mode</p>
+            </div>
+            <button class="btn btn-primary" onclick="closeTutorial()" style="margin-top:20px; width:100%;">🚀 Get Started!</button>
+        </div>
+    </div>
 </body>
 </html>
 """
