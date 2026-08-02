@@ -186,7 +186,69 @@ HTML = r"""
         .dropdown-search .dropdown-list { position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: var(--surface2); border: 1px solid var(--accent); border-radius: 0 0 8px 8px; z-index: 10; display: none; }
         .dropdown-search .dropdown-list div { padding: 8px 12px; cursor: pointer; font-size: 0.85em; }
         .dropdown-search .dropdown-list div:hover { background: var(--accent-glow); color: var(--accent2); }
-        @media (max-width: 600px) { .logo { font-size: 1.8em; } .compose-grid { grid-template-columns: 1fr; } .tabs { flex-wrap: wrap; } .tab { font-size: 0.65em; padding: 6px 8px; } .white-key { width: 26px; height: 90px; font-size: 0.35em; } .black-key { width: 14px; height: 58px; font-size: 0.25em; } .piano { height: 90px; width: 364px; } }
+        @media (max-width: 600px) {
+            .logo { font-size: 1.6em; }
+            .subtitle { font-size: 0.7em; }
+            .container { padding: 0 8px; }
+            
+            /* Вкладки — горизонтальный скролл */
+            .tabs { 
+                flex-wrap: nowrap; 
+                overflow-x: auto; 
+                -webkit-overflow-scrolling: touch;
+                padding-bottom: 4px;
+                gap: 2px;
+            }
+            .tab { 
+                font-size: 0.7em; 
+                padding: 8px 10px; 
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+            
+            /* Карточки */
+            .card { padding: 14px; border-radius: 0 0 12px 12px; }
+            
+            /* Compose — одна колонка */
+            .compose-grid { grid-template-columns: 1fr; gap: 8px; }
+            .compose-row .cat-label { width: 65px; font-size: 0.6em; }
+            .compose-row .dropdown-search { min-width: auto; }
+            .compose-row input { font-size: 14px; padding: 10px; }
+            
+            /* Кнопки крупнее */
+            .btn { padding: 10px 16px; font-size: 14px; }
+            .btn-sm { padding: 8px 12px; font-size: 0.75em; }
+            .compose-buttons { gap: 6px; }
+            .compose-buttons .btn { flex: 1; min-width: 0; }
+            
+            /* Пианино */
+            .white-key { width: 22px; height: 80px; font-size: 0.3em; padding-bottom: 3px; }
+            .black-key { width: 14px; height: 50px; font-size: 0.22em; }
+            .piano { height: 80px; width: 308px; }
+            .piano-sequence { font-size: 0.7em; }
+            
+            /* Таблицы */
+            table { font-size: 0.7em; }
+            th, td { padding: 6px; }
+            .table-wrap { max-height: 250px; }
+            
+            /* Скорость */
+            .speed-row { gap: 4px; font-size: 0.7em; }
+            .speed-row input[type=range] { width: 60px; }
+            
+            /* Поиск */
+            .search-row { flex-direction: column; gap: 6px; }
+            .search-row input { width: 100%; }
+            .search-row .btn { width: 100%; }
+            
+            /* Sentences */
+            .sentence-row { flex-wrap: wrap; gap: 4px; }
+            .sentence-row .dropdown-search { min-width: 120px; }
+            
+            /* Stats */
+            .top-row { flex-direction: column; align-items: flex-start; gap: 6px; }
+            .stats { gap: 10px; font-size: 0.65em; }
+        }
     </style>
 </head>
 <body>
