@@ -1,9 +1,10 @@
-# web/app.py
+# web/app.py — ПОЛНАЯ ЗАМЕНА
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template_string, request, jsonify, send_file
+from flask_sqlalchemy import SQLAlchemy
 import numpy as np
 import io
 import wave as wave_module
@@ -13,32 +14,33 @@ from core.constants import NoteName
 from language.primitives import SemanticPrimitives
 from language.descriptors import DescriptorGrammar
 
-from flask_sqlalchemy import SQLAlchemy
-
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///../solres.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///../shared.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
-
-class SharedWord(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    primitives = db.Column(db.String(500), nullable=False)
-    source = db.Column(db.String(50), default='👤 User')
-    created = db.Column(db.String(30))
-
-class SharedSentence(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    words = db.Column(db.String(500), nullable=False)
-    created = db.Column(db.String(30))
-
 
 primitives = SemanticPrimitives()
 descriptors = DescriptorGrammar()
 
 SAMPLE_RATE = 44100
 SHARP_SEMITONES = {1, 3, 6, 8, 10}
+
+
+class SharedWord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    primitives = db.Column(db.String(500), nullable=False)
+    author = db.Column(db.String(50), default='Anonymous')
+    source = db.Column(db.String(50), default='👤 User')
+    created = db.Column(db.String(30))
+
+
+class SharedSentence(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    words = db.Column(db.String(500), nullable=False)
+    author = db.Column(db.String(50), default='Anonymous')
+    created = db.Column(db.String(30))
 
 
 def midi_to_frequency(midi: int) -> float:
@@ -109,32 +111,33 @@ HTML = r"""
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SolRes — Universal Musical Language</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root { --bg: #020210; --accent: #ff6a00; --accent2: #ff9500; --accent-glow: rgba(255,106,0,0.4); --surface: rgba(12,12,32,0.85); --surface2: rgba(20,20,50,0.9); --green: #00e676; --text: #d0d0e0; --muted: #707090; --red: #ff4757; --radius: 16px; --transition: 0.2s ease; }
         .light-theme { --bg: #f5f0e8; --accent: #7c3aed; --accent2: #a78bfa; --accent-glow: rgba(124,58,237,0.3); --surface: rgba(255,255,255,0.85); --surface2: rgba(240,235,225,0.9); --text: #1a1a2e; --muted: #6a6a7a; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 20px; transition: background 0.5s, color 0.5s; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 16px; transition: background 0.5s, color 0.5s; }
         #starfield { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
-        .container { max-width: 850px; margin: 0 auto; position: relative; z-index: 1; }
-        header { text-align: center; margin-bottom: 20px; }
-        .logo { font-size: 2.5em; font-weight: 700; background: linear-gradient(135deg, var(--accent2), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-        .subtitle { color: var(--muted); font-size: 0.85em; }
-        .top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
-        .stats { display: flex; gap: 16px; font-size: 0.75em; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+        .container { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+        header { text-align: center; margin-bottom: 16px; }
+        .logo { font-size: 2.3em; font-weight: 700; background: linear-gradient(135deg, var(--accent2), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .subtitle { color: var(--muted); font-size: 0.8em; }
+        .top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+        .stats { display: flex; gap: 14px; font-size: 0.7em; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
         .stats span { color: var(--accent); font-weight: 600; }
-        .theme-toggle { background: var(--surface2); border: 1px solid rgba(255,255,255,0.08); color: var(--text); padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 0.8em; font-family: inherit; }
-        .tabs { display: flex; gap: 3px; margin-bottom: 14px; flex-wrap: wrap; }
-        .tab { padding: 8px 12px; border-radius: 10px 10px 0 0; background: var(--surface2); color: var(--muted); cursor: pointer; font-size: 0.78em; font-weight: 500; border: none; font-family: inherit; transition: all var(--transition); }
+        .theme-toggle { background: var(--surface2); border: 1px solid rgba(255,255,255,0.08); color: var(--text); padding: 6px 12px; border-radius: 18px; cursor: pointer; font-size: 0.75em; font-family: inherit; }
+        .tabs { display: flex; gap: 2px; margin-bottom: 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+        .tabs::-webkit-scrollbar { height: 3px; }
+        .tabs::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+        .tab { padding: 8px 12px; border-radius: 10px 10px 0 0; background: var(--surface2); color: var(--muted); cursor: pointer; font-size: 0.75em; font-weight: 500; border: none; font-family: inherit; white-space: nowrap; flex-shrink: 0; }
         .tab.active { background: var(--surface); color: var(--accent); font-weight: 600; }
-        .card { background: var(--surface); border: 1px solid rgba(255,255,255,0.04); border-radius: 0 0 var(--radius) var(--radius); padding: 20px; backdrop-filter: blur(10px); }
-        .search-row { display: flex; gap: 8px; margin-bottom: 12px; }
-        input, select { padding: 8px 12px; font-size: 13px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.06); background: var(--surface2); color: var(--text); font-family: inherit; }
+        .card { background: var(--surface); border: 1px solid rgba(255,255,255,0.04); border-radius: 0 0 var(--radius) var(--radius); padding: 18px; backdrop-filter: blur(10px); }
+        .search-row { display: flex; gap: 8px; margin-bottom: 10px; }
+        input, select { padding: 8px 10px; font-size: 13px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.06); background: var(--surface2); color: var(--text); font-family: inherit; }
         .light-theme input, .light-theme select { border-color: rgba(0,0,0,0.1); }
         input:focus, select:focus { border-color: var(--accent); outline: none; }
         .btn { padding: 8px 14px; font-size: 13px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-family: inherit; }
         .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #000; }
-        .btn-sm { padding: 4px 8px; font-size: 0.7em; border-radius: 6px; background: var(--surface2); color: var(--accent); border: 1px solid rgba(255,255,255,0.05); cursor: pointer; }
+        .btn-sm { padding: 5px 8px; font-size: 0.7em; border-radius: 6px; background: var(--surface2); color: var(--accent); border: 1px solid rgba(255,255,255,0.05); cursor: pointer; }
         .btn-xs { padding: 2px 5px; font-size: 0.65em; border-radius: 4px; background: transparent; color: var(--muted); border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
         .btn-danger { background: rgba(255,71,87,0.2); color: var(--red); border: 1px solid var(--red); }
         .notes-display { font-size: 1.2em; font-weight: 600; letter-spacing: 2px; text-align: center; padding: 10px; background: var(--surface2); border-radius: 10px; color: var(--accent2); word-break: break-all; font-family: 'Courier New', monospace; margin-top: 8px; }
@@ -157,9 +160,10 @@ HTML = r"""
         th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.04); }
         th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.7em; }
         .table-wrap { max-height: 350px; overflow-y: auto; border-radius: 10px; }
-        .badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 0.75em; background: var(--accent-glow); color: var(--accent2); }
+        .badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 0.75em; }
         .badge-user { background: rgba(0,230,118,0.2); color: var(--green); }
         .badge-system { background: var(--accent-glow); color: var(--accent2); }
+        .badge-community { background: rgba(100,150,255,0.2); color: #80b0ff; }
         .instrument-select { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; justify-content: center; flex-wrap: wrap; }
         .piano-container { overflow-x: auto; padding: 8px 0; display: flex; justify-content: center; }
         .piano { position: relative; height: 130px; width: 504px; user-select: none; }
@@ -187,67 +191,21 @@ HTML = r"""
         .dropdown-search .dropdown-list div { padding: 8px 12px; cursor: pointer; font-size: 0.85em; }
         .dropdown-search .dropdown-list div:hover { background: var(--accent-glow); color: var(--accent2); }
         @media (max-width: 600px) {
-            .logo { font-size: 1.6em; }
-            .subtitle { font-size: 0.7em; }
-            .container { padding: 0 8px; }
-            
-            /* Вкладки — горизонтальный скролл */
-            .tabs { 
-                flex-wrap: nowrap; 
-                overflow-x: auto; 
-                -webkit-overflow-scrolling: touch;
-                padding-bottom: 4px;
-                gap: 2px;
-            }
-            .tab { 
-                font-size: 0.7em; 
-                padding: 8px 10px; 
-                white-space: nowrap;
-                flex-shrink: 0;
-            }
-            
-            /* Карточки */
+            .logo { font-size: 1.6em; } .subtitle { font-size: 0.7em; } .container { padding: 0 6px; }
+            .tabs { gap: 1px; } .tab { font-size: 0.68em; padding: 7px 9px; }
             .card { padding: 14px; border-radius: 0 0 12px 12px; }
-            
-            /* Compose — одна колонка */
             .compose-grid { grid-template-columns: 1fr; gap: 8px; }
-            .compose-row .cat-label { width: 65px; font-size: 0.6em; }
-            .compose-row .dropdown-search { min-width: auto; }
-            .compose-row input { font-size: 14px; padding: 10px; }
-            
-            /* Кнопки крупнее */
-            .btn { padding: 10px 16px; font-size: 14px; }
-            .btn-sm { padding: 8px 12px; font-size: 0.75em; }
-            .compose-buttons { gap: 6px; }
+            .compose-row .cat-label { width: 60px; font-size: 0.6em; }
+            .compose-row .dropdown-search { min-width: auto; } .compose-row input { font-size: 14px; padding: 10px; }
+            .btn { padding: 10px 16px; font-size: 14px; } .btn-sm { padding: 8px 12px; font-size: 0.75em; }
             .compose-buttons .btn { flex: 1; min-width: 0; }
-            
-            /* Пианино */
-            .white-key { width: 22px; height: 80px; font-size: 0.3em; padding-bottom: 3px; }
-            .black-key { width: 14px; height: 50px; font-size: 0.22em; }
-            .piano { height: 80px; width: 308px; }
-            .piano-sequence { font-size: 0.7em; }
-            
-            /* Таблицы */
-            table { font-size: 0.7em; }
-            th, td { padding: 6px; }
-            .table-wrap { max-height: 250px; }
-            
-            /* Скорость */
-            .speed-row { gap: 4px; font-size: 0.7em; }
-            .speed-row input[type=range] { width: 60px; }
-            
-            /* Поиск */
-            .search-row { flex-direction: column; gap: 6px; }
-            .search-row input { width: 100%; }
-            .search-row .btn { width: 100%; }
-            
-            /* Sentences */
-            .sentence-row { flex-wrap: wrap; gap: 4px; }
-            .sentence-row .dropdown-search { min-width: 120px; }
-            
-            /* Stats */
-            .top-row { flex-direction: column; align-items: flex-start; gap: 6px; }
-            .stats { gap: 10px; font-size: 0.65em; }
+            .white-key { width: 22px; height: 80px; font-size: 0.3em; } .black-key { width: 14px; height: 50px; font-size: 0.22em; }
+            .piano { height: 80px; width: 308px; } .piano-sequence { font-size: 0.7em; }
+            table { font-size: 0.7em; } th, td { padding: 6px; } .table-wrap { max-height: 250px; }
+            .speed-row { gap: 4px; font-size: 0.7em; } .speed-row input[type=range] { width: 60px; }
+            .search-row { flex-direction: column; } .search-row input, .search-row .btn { width: 100%; }
+            .sentence-row { flex-wrap: wrap; } .sentence-row .dropdown-search { min-width: 120px; }
+            .top-row { flex-direction: column; align-items: flex-start; } .stats { gap: 10px; font-size: 0.65em; }
         }
     </style>
 </head>
@@ -264,6 +222,7 @@ HTML = r"""
             <button class="tab" onclick="switchTab('compose')">🧩 Compose</button>
             <button class="tab" onclick="switchTab('instruments')">🎸 Instruments</button>
             <button class="tab" onclick="switchTab('mywords')">📝 My Words</button>
+            <button class="tab" onclick="switchTab('community')">🌐 Community</button>
             <button class="tab" onclick="switchTab('sentences')">💬 Sentences</button>
             <button class="tab" onclick="switchTab('text')">📄 Text</button>
             <button class="tab" onclick="switchTab('dictionary')">📖 Dictionary</button>
@@ -321,7 +280,13 @@ HTML = r"""
             <button class="btn btn-sm" onclick="loadMyWords()" style="margin-bottom:10px;">🔄 Refresh</button>
             <button class="btn btn-sm btn-danger" onclick="clearMyWords()" style="margin-bottom:10px;margin-left:6px;">🗑 Clear All</button>
             <div class="speed-row"><span>🐢</span><input type="range" id="mywordsSpeed" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateSpeedLabel('mywordsSpeed','mywordsSpeedLabel')"><span>🐇</span><span id="mywordsSpeedLabel" style="color:var(--accent);">1.0x</span></div>
-            <div class="table-wrap"><table id="myWordsTable"><thead><tr><th>Name</th><th>Primitives</th><th>Source</th><th style="width:24px;"></th><th style="width:24px;"></th></tr></thead><tbody></tbody></table></div>
+            <div class="table-wrap"><table id="myWordsTable"><thead><tr><th>Name</th><th>Primitives</th><th>Source</th><th style="width:24px;"></th><th style="width:24px;"></th><th style="width:24px;"></th></tr></thead><tbody></tbody></table></div>
+        </div>
+
+        <!-- COMMUNITY -->
+        <div class="card" id="tab-community" style="display:none;">
+            <button class="btn btn-sm" onclick="loadCommunityWords()" style="margin-bottom:10px;">🔄 Refresh</button>
+            <div class="table-wrap"><table id="communityTable"><thead><tr><th>Name</th><th>Primitives</th><th>Author</th><th style="width:24px;"></th></tr></thead><tbody></tbody></table></div>
         </div>
 
         <!-- SENTENCES -->
@@ -393,7 +358,7 @@ HTML = r"""
         function toggleTheme() { const btn = document.getElementById('themeBtn'); if (theme === 'dark') { theme = 'light'; document.body.classList.add('light-theme'); btn.textContent = '🌙 Dark'; } else { theme = 'dark'; document.body.classList.remove('light-theme'); btn.textContent = '☀️ Light'; } }
 
         // === TABS ===
-        function switchTab(tab) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); document.querySelectorAll('.card').forEach(c => c.style.display = 'none'); document.getElementById('tab-' + tab).style.display = 'block'; event.target.classList.add('active'); if (tab === 'mywords') loadMyWords(); if (tab === 'sentences') loadSentenceRows(); if (tab === 'text') loadText(); if (tab === 'instruments') buildPiano(); }
+        function switchTab(tab) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); document.querySelectorAll('.card').forEach(c => c.style.display = 'none'); document.getElementById('tab-' + tab).style.display = 'block'; event.target.classList.add('active'); if (tab === 'mywords') loadMyWords(); if (tab === 'community') loadCommunityWords(); if (tab === 'sentences') loadSentenceRows(); if (tab === 'text') loadText(); if (tab === 'instruments') buildPiano(); }
 
         // === STORAGE ===
         function getMyWords() { try { return JSON.parse(localStorage.getItem('solres_mywords') || '[]'); } catch(e) { return []; } }
@@ -401,66 +366,26 @@ HTML = r"""
         function getSentences() { try { return JSON.parse(localStorage.getItem('solres_sentences') || '[]'); } catch(e) { return []; } }
         function saveSentences(s) { localStorage.setItem('solres_sentences', JSON.stringify(s)); }
 
-        // === SPEED HELPERS ===
-        function updateSpeedLabel(sliderId, labelId) {
-            const val = parseFloat(document.getElementById(sliderId).value).toFixed(1);
-            document.getElementById(labelId).textContent = val + 'x';
-        }
+        // === SPEED ===
+        function updateSpeedLabel(sliderId, labelId) { const val = parseFloat(document.getElementById(sliderId).value).toFixed(1); document.getElementById(labelId).textContent = val + 'x'; }
         function getSpeed(id) { return parseFloat(document.getElementById(id).value) || 1.0; }
 
         // === TRANSLATE ===
-        async function translateWord() {
-            const word = document.getElementById('wordInput').value.trim(); if (!word) return; currentWord = word;
-            const res = await fetch('/translate?word=' + encodeURIComponent(word)); const data = await res.json();
-            let html = ''; if (data.error) { html = '<div class="error-msg">' + data.error + '</div>'; }
-            else { if (data.description) { html += '<div class="desc-row">'; data.description.forEach(d => { html += '<span>' + d + '</span> '; }); html += '</div>'; } html += '<div class="notes-display">' + data.notes + '</div>'; if (data.meaning && data.meaning !== 'not found') { html += '<div class="meaning">' + data.meaning + '</div>'; } }
-            document.getElementById('result').innerHTML = html; if (!data.error) playAudio();
-        }
+        async function translateWord() { const word = document.getElementById('wordInput').value.trim(); if (!word) return; currentWord = word; const res = await fetch('/translate?word=' + encodeURIComponent(word)); const data = await res.json(); let html = ''; if (data.error) { html = '<div class="error-msg">' + data.error + '</div>'; } else { if (data.description) { html += '<div class="desc-row">'; data.description.forEach(d => { html += '<span>' + d + '</span> '; }); html += '</div>'; } html += '<div class="notes-display">' + data.notes + '</div>'; if (data.meaning && data.meaning !== 'not found') { html += '<div class="meaning">' + data.meaning + '</div>'; } } document.getElementById('result').innerHTML = html; if (!data.error) playAudio(); }
         async function playAudio() { if (!currentWord) return; const r = await fetch('/play?word=' + encodeURIComponent(currentWord) + '&speed=' + getSpeed('speedSlider')); const p = document.getElementById('audioPlayer'); p.style.display = 'block'; p.src = URL.createObjectURL(await r.blob()); p.play(); }
 
         // === DICTIONARY ===
         function filterDict() { const q = document.getElementById('dictSearch').value.toLowerCase(); document.querySelectorAll('#primitivesTable tbody tr, #wordsTable tbody tr').forEach(tr => { tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none'; }); }
         function playDictWord(word) { document.getElementById('wordInput').value = word; switchTab('translate'); translateWord(); }
 
-        // === DROPDOWN HELPERS ===
-        function buildDropdown(list, items, input) {
-            list.innerHTML = items.map((item, i) => `<div data-idx="${i}" onmousedown="selectDropdown(this, '${item.replace(/'/g, "\\'")}')">${item}</div>`).join('');
-            list.dataset.items = JSON.stringify(items);
-        }
-        function toggleDropdown(input, show) {
-            const list = input.parentElement.querySelector('.dropdown-list');
-            list.style.display = show ? 'block' : 'none';
-            if (show) filterDropdown(input);
-        }
-        function filterDropdown(input) {
-            const list = input.parentElement.querySelector('.dropdown-list');
-            const q = input.value.toLowerCase();
-            list.querySelectorAll('div').forEach(d => { d.style.display = d.textContent.toLowerCase().includes(q) ? '' : 'none'; });
-            list.style.display = 'block';
-        }
-        function selectDropdown(div, word) {
-            const input = div.parentElement.parentElement.querySelector('input');
-            input.value = word;
-            div.parentElement.style.display = 'none';
-            if (typeof validateCompose === 'function') validateCompose();
-        }
+        // === DROPDOWN ===
+        function buildDropdown(list, items, input) { list.innerHTML = items.map((item, i) => `<div data-idx="${i}" onmousedown="selectDropdown(this, '${item.replace(/'/g, "\\'")}')">${item}</div>`).join(''); }
+        function toggleDropdown(input, show) { const list = input.parentElement.querySelector('.dropdown-list'); list.style.display = show ? 'block' : 'none'; if (show) filterDropdown(input); }
+        function filterDropdown(input) { const list = input.parentElement.querySelector('.dropdown-list'); const q = input.value.toLowerCase(); list.querySelectorAll('div').forEach(d => { d.style.display = d.textContent.toLowerCase().includes(q) ? '' : 'none'; }); list.style.display = 'block'; }
+        function selectDropdown(div, word) { const input = div.parentElement.parentElement.querySelector('input'); input.value = word; div.parentElement.style.display = 'none'; if (typeof validateCompose === 'function') validateCompose(); }
 
         // === COMPOSE ===
-        function buildComposeGrid() {
-            const g = document.getElementById('composeGrid'); g.innerHTML = '';
-            CATEGORY_ORDER.forEach((cat, i) => {
-                const words = CATEGORIES[cat] || [];
-                const row = document.createElement('div'); row.className = 'compose-row'; row.id = 'compose-row-' + i;
-                row.innerHTML = `<span class="cat-label">${cat.split(':').pop()}</span>
-                    <div class="dropdown-search">
-                        <input type="text" placeholder="—" onfocus="toggleDropdown(this,true)" oninput="filterDropdown(this)" onblur="setTimeout(()=>toggleDropdown(this,false),200)">
-                        <div class="dropdown-list"></div>
-                    </div>
-                    <button class="btn-xs" onclick="showIntervalInfo('${cat}', event)">ℹ️</button>`;
-                g.appendChild(row);
-                buildDropdown(row.querySelector('.dropdown-list'), words, row.querySelector('input'));
-            });
-        }
+        function buildComposeGrid() { const g = document.getElementById('composeGrid'); g.innerHTML = ''; CATEGORY_ORDER.forEach((cat, i) => { const words = CATEGORIES[cat] || []; const row = document.createElement('div'); row.className = 'compose-row'; row.id = 'compose-row-' + i; row.innerHTML = `<span class="cat-label">${cat.split(':').pop()}</span><div class="dropdown-search"><input type="text" placeholder="—" onfocus="toggleDropdown(this,true)" oninput="filterDropdown(this)" onblur="setTimeout(()=>toggleDropdown(this,false),200)"><div class="dropdown-list"></div></div><button class="btn-xs" onclick="showIntervalInfo('${cat}', event)">ℹ️</button>`; g.appendChild(row); buildDropdown(row.querySelector('.dropdown-list'), words, row.querySelector('input')); }); }
         function showIntervalInfo(cat, e) { const sample = CATEGORIES[cat]?.[0]; if (sample && PRIMITIVE_INFO[sample]) { const t = document.createElement('div'); t.style.cssText = 'position:absolute;background:var(--surface2);color:var(--text);padding:8px 12px;border-radius:8px;font-size:0.8em;z-index:10;border:1px solid var(--accent);'; t.textContent = 'Interval: ' + PRIMITIVE_INFO[sample].pattern; document.body.appendChild(t); t.style.left = e.clientX + 'px'; t.style.top = (e.clientY - 40) + 'px'; setTimeout(() => t.remove(), 2000); } }
         function getSelectedPrimitives() { const s = []; CATEGORY_ORDER.forEach((cat, i) => { const inp = document.querySelector(`#compose-row-${i} input`); if (inp && inp.value && CATEGORIES[cat]?.includes(inp.value)) s.push({word: inp.value, category: cat, index: i}); }); return s; }
         function validateCompose() { const selected = getSelectedPrimitives(); let lastIdx = -1, valid = true; CATEGORY_ORDER.forEach((_, i) => { const row = document.getElementById('compose-row-' + i); if (row) row.classList.remove('invalid'); }); for (const s of selected) { const catIdx = CATEGORY_ORDER.indexOf(s.category); if (catIdx < lastIdx) { valid = false; document.getElementById('compose-row-' + s.index).classList.add('invalid'); } lastIdx = catIdx; } document.getElementById('composeError').innerHTML = ''; return {valid, selected}; }
@@ -486,76 +411,27 @@ HTML = r"""
         buildPiano();
 
         // === MY WORDS ===
-        function loadMyWords() { const words = getMyWords(); let html = ''; words.forEach((w, i) => { html += `<tr><td>${w.name}</td><td>${(w.primitives||[]).join(', ')}</td><td><span class="badge ${w.source==='📖 System'?'badge-system':'badge-user'}">${w.source||'?'}</span></td><td><button class="btn-sm" onclick="playMyWord(${i})">▶</button></td><td><button class="btn-sm" onclick="publishMyWord(${i})" title="Publish to shared library">🌐</button></td><td><button class="btn-sm btn-danger" onclick="deleteMyWord(${i})">✕</button></td></tr>`; }); document.querySelector('#myWordsTable tbody').innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">No saved words yet.</td></tr>'; }
+        function loadMyWords() { const words = getMyWords(); let html = ''; words.forEach((w, i) => { html += `<tr><td>${w.name}</td><td>${(w.primitives||[]).join(', ')}</td><td><span class="badge ${w.source==='📖 System'?'badge-system':'badge-user'}">${w.source||'?'}</span></td><td><button class="btn-sm" onclick="playMyWord(${i})">▶</button></td><td><button class="btn-sm" onclick="publishMyWord(${i})" title="Publish">🌐</button></td><td><button class="btn-sm btn-danger" onclick="deleteMyWord(${i})">✕</button></td></tr>`; }); document.querySelector('#myWordsTable tbody').innerHTML = html || '<tr><td colspan="6" style="text-align:center;color:var(--muted);">No saved words yet.</td></tr>'; }
         async function playMyWord(idx) { const words = getMyWords(); if (!words[idx]) return; const ar = await fetch('/compose_play?words=' + encodeURIComponent((words[idx].primitives||[]).join(',')) + '&speed=' + getSpeed('mywordsSpeed')); new Audio(URL.createObjectURL(await ar.blob())).play(); }
+        async function publishMyWord(idx) { const words = getMyWords(); if (!words[idx]) return; const w = words[idx]; const author = prompt('Your name (or leave empty for anonymous):', '') || 'Anonymous'; await fetch('/shared/words/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: w.name, primitives: w.primitives, source: w.source, created: w.created, author: author}) }); alert('Published: ' + w.name); }
         function deleteMyWord(idx) { const words = getMyWords(); words.splice(idx, 1); saveMyWords(words); loadMyWords(); }
-        async function publishMyWord(idx) {
-            const words = getMyWords();
-            if (!words[idx]) return;
-            const w = words[idx];
-            await fetch('/shared/words/add', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({name: w.name, primitives: w.primitives, source: w.source, created: w.created})
-            });
-            alert('Published: ' + w.name);
-        }
         function clearMyWords() { if (confirm('Delete all?')) { saveMyWords([]); loadMyWords(); } }
+
+        // === COMMUNITY ===
+        async function loadCommunityWords() { const r = await fetch('/shared/words'); const words = await r.json(); let html = ''; words.forEach(w => { html += `<tr><td>${w.name}</td><td>${(w.primitives||[]).join(', ')}</td><td><span class="badge badge-community">${w.author||'Anonymous'}</span></td><td><button class="btn-sm" onclick="playCommunityWord('${(w.primitives||[]).join(',')}')">▶</button></td></tr>`; }); document.querySelector('#communityTable tbody').innerHTML = html || '<tr><td colspan="4" style="text-align:center;color:var(--muted);">No community words yet. Be the first to publish!</td></tr>'; }
+        async function playCommunityWord(primitives) { const ar = await fetch('/compose_play?words=' + encodeURIComponent(primitives) + '&speed=1.0'); new Audio(URL.createObjectURL(await ar.blob())).play(); }
 
         // === SENTENCES ===
         function getAllWordsForSelect() { const myWords = getMyWords(); const dictWords = Object.entries(DICTIONARY_WORDS).map(([name, data]) => ({name, primitives: data.ru, source: '📖 System'})); return [...dictWords, ...myWords]; }
         function loadSentenceRows() { document.getElementById('sentenceRows').innerHTML = ''; addSentenceRow(); }
-        function addSentenceRow() { const allWords = getAllWordsForSelect(); const container = document.getElementById('sentenceRows'); const row = document.createElement('div'); row.className = 'sentence-row'; row.draggable = true;
-            row.innerHTML = `<span class="drag-handle" draggable="true">⋮⋮</span>
-                <div class="dropdown-search">
-                    <input type="text" placeholder="🔍 Search word..." onfocus="toggleDropdown(this, true)" oninput="filterDropdown(this)" onblur="setTimeout(()=>toggleDropdown(this,false),200)">
-                    <div class="dropdown-list"></div>
-                </div>
-                <button class="btn-sm btn-danger" onclick="this.parentElement.remove()">✕</button>`;
-            row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', Array.from(container.children).indexOf(row)); row.classList.add('dragging'); });
-            row.addEventListener('dragend', () => row.classList.remove('dragging'));
-            row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag-over'); });
-            row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
-            row.addEventListener('drop', (e) => { e.preventDefault(); row.classList.remove('drag-over'); const from = parseInt(e.dataTransfer.getData('text/plain')); const to = Array.from(container.children).indexOf(row); if (from !== to && from >= 0 && to >= 0) { container.insertBefore(container.children[from], container.children[to + (from < to ? 1 : 0)]); } });
-            container.appendChild(row);
-            const names = allWords.map(w => w.name);
-            buildDropdown(row.querySelector('.dropdown-list'), names, row.querySelector('input'));
-        }
-        async function playSentence() {
-            const allWords = getAllWordsForSelect(); const selected = [];
-            document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => {
-                if (inp.value) { const w = allWords.find(aw => aw.name === inp.value); if (w) selected.push(w); }
-            });
-            if (selected.length === 0) return;
-            const allPrims = selected.flatMap(w => w.primitives || []);
-            const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('sentSpeed'));
-            const p = document.getElementById('sentenceAudio'); p.style.display = 'block'; p.src = URL.createObjectURL(await ar.blob()); p.play();
-        }
+        function addSentenceRow() { const allWords = getAllWordsForSelect(); const container = document.getElementById('sentenceRows'); const row = document.createElement('div'); row.className = 'sentence-row'; row.draggable = true; row.innerHTML = `<span class="drag-handle" draggable="true">⋮⋮</span><div class="dropdown-search"><input type="text" placeholder="🔍 Search word..." onfocus="toggleDropdown(this, true)" oninput="filterDropdown(this)" onblur="setTimeout(()=>toggleDropdown(this,false),200)"><div class="dropdown-list"></div></div><button class="btn-sm btn-danger" onclick="this.parentElement.remove()">✕</button>`; row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', Array.from(container.children).indexOf(row)); row.classList.add('dragging'); }); row.addEventListener('dragend', () => row.classList.remove('dragging')); row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag-over'); }); row.addEventListener('dragleave', () => row.classList.remove('drag-over')); row.addEventListener('drop', (e) => { e.preventDefault(); row.classList.remove('drag-over'); const from = parseInt(e.dataTransfer.getData('text/plain')); const to = Array.from(container.children).indexOf(row); if (from !== to && from >= 0 && to >= 0) { container.insertBefore(container.children[from], container.children[to + (from < to ? 1 : 0)]); } }); container.appendChild(row); buildDropdown(row.querySelector('.dropdown-list'), allWords.map(w => w.name), row.querySelector('input')); }
+        async function playSentence() { const allWords = getAllWordsForSelect(); const selected = []; document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => { if (inp.value) { const w = allWords.find(aw => aw.name === inp.value); if (w) selected.push(w); } }); if (selected.length === 0) return; const allPrims = selected.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('sentSpeed')); const p = document.getElementById('sentenceAudio'); p.style.display = 'block'; p.src = URL.createObjectURL(await ar.blob()); p.play(); }
         function saveSentence() { const name = document.getElementById('sentenceName').value.trim() || 'sentence_' + Date.now(); const wordNames = []; document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => { if (inp.value) wordNames.push(inp.value); }); if (wordNames.length < 2) return; const sentences = getSentences(); sentences.push({name, words: wordNames, created: new Date().toISOString()}); saveSentences(sentences); document.getElementById('sentenceName').value = ''; alert('Saved: ' + name); }
         function clearSentence() { document.getElementById('sentenceRows').innerHTML = ''; addSentenceRow(); document.getElementById('sentenceName').value = ''; }
 
         // === TEXT ===
-        function loadText() { const sentences = getSentences(); const container = document.getElementById('textList'); if (sentences.length === 0) { container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;">No saved sentences yet.</div>'; return; } container.innerHTML = sentences.map((s, i) => `<div class="sentence-row" draggable="true" data-idx="${i}"><span class="drag-handle" draggable="true">⋮⋮</span><span style="flex:1;">${s.name}: ${(s.words||[]).join(', ')}</span><button class="btn-sm" onclick="playTextSentence(${i})">▶</button><button class="btn-sm btn-danger" onclick="deleteTextSentence(${i})">✕</button></div>`).join('');
-            container.querySelectorAll('.sentence-row').forEach(row => {
-                row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', row.dataset.idx); row.classList.add('dragging'); });
-                row.addEventListener('dragend', () => row.classList.remove('dragging'));
-                row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag-over'); });
-                row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
-                row.addEventListener('drop', (e) => { e.preventDefault(); row.classList.remove('drag-over'); const from = parseInt(e.dataTransfer.getData('text/plain')); const to = parseInt(row.dataset.idx); if (from !== to && !isNaN(from) && !isNaN(to)) { const s = getSentences(); const [moved] = s.splice(from, 1); s.splice(to, 0, moved); saveSentences(s); loadText(); } });
-            });
-        }
-        async function playText() {
-            const sentences = getSentences(); if (sentences.length === 0) return;
-            const allWords = getAllWordsForSelect();
-            for (const s of sentences) {
-                const words = s.words.map(name => allWords.find(w => w.name === name)).filter(Boolean);
-                if (words.length === 0) continue;
-                const allPrims = words.flatMap(w => w.primitives || []);
-                const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed'));
-                const a = new Audio(URL.createObjectURL(await ar.blob()));
-                a.play(); await new Promise(r => { a.onended = r; setTimeout(r, 5000); });
-            }
-        }
+        function loadText() { const sentences = getSentences(); const container = document.getElementById('textList'); if (sentences.length === 0) { container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;">No saved sentences yet.</div>'; return; } container.innerHTML = sentences.map((s, i) => `<div class="sentence-row" draggable="true" data-idx="${i}"><span class="drag-handle" draggable="true">⋮⋮</span><span style="flex:1;">${s.name}: ${(s.words||[]).join(', ')}</span><button class="btn-sm" onclick="playTextSentence(${i})">▶</button><button class="btn-sm btn-danger" onclick="deleteTextSentence(${i})">✕</button></div>`).join(''); container.querySelectorAll('.sentence-row').forEach(row => { row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', row.dataset.idx); row.classList.add('dragging'); }); row.addEventListener('dragend', () => row.classList.remove('dragging')); row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag-over'); }); row.addEventListener('dragleave', () => row.classList.remove('drag-over')); row.addEventListener('drop', (e) => { e.preventDefault(); row.classList.remove('drag-over'); const from = parseInt(e.dataTransfer.getData('text/plain')); const to = parseInt(row.dataset.idx); if (from !== to && !isNaN(from) && !isNaN(to)) { const s = getSentences(); const [moved] = s.splice(from, 1); s.splice(to, 0, moved); saveSentences(s); loadText(); } }); }); }
+        async function playText() { const sentences = getSentences(); if (sentences.length === 0) return; const allWords = getAllWordsForSelect(); for (const s of sentences) { const words = s.words.map(name => allWords.find(w => w.name === name)).filter(Boolean); if (words.length === 0) continue; const allPrims = words.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed')); const a = new Audio(URL.createObjectURL(await ar.blob())); a.play(); await new Promise(r => { a.onended = r; setTimeout(r, 5000); }); } }
         async function playTextSentence(idx) { const sentences = getSentences(); if (!sentences[idx]) return; const allWords = getAllWordsForSelect(); const words = sentences[idx].words.map(name => allWords.find(w => w.name === name)).filter(Boolean); if (words.length === 0) return; const allPrims = words.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed')); new Audio(URL.createObjectURL(await ar.blob())).play(); }
         function deleteTextSentence(idx) { const s = getSentences(); s.splice(idx, 1); saveSentences(s); loadText(); }
         function clearText() { if (confirm('Delete all?')) { saveSentences([]); loadText(); } }
@@ -717,20 +593,24 @@ def analyze():
             if data['ru'] == primitives_ru: word_found = word; break
     return jsonify({'results': results, 'all_found': all_found, 'primitives_ru': primitives_ru, 'word_found': word_found})
 
+
 with app.app_context():
     db.create_all()
+
 
 @app.route('/shared/words')
 def shared_words():
     words = SharedWord.query.order_by(SharedWord.id.desc()).all()
-    return jsonify([{'id': w.id, 'name': w.name, 'primitives': w.primitives.split(','), 'source': w.source, 'created': w.created} for w in words])
+    return jsonify([{'id': w.id, 'name': w.name, 'primitives': w.primitives.split(','), 'author': w.author, 'source': w.source, 'created': w.created} for w in words])
+
 
 @app.route('/shared/words/add', methods=['POST'])
 def add_shared_word():
     data = request.get_json()
-    w = SharedWord(name=data['name'], primitives=','.join(data['primitives']), source=data.get('source','👤 User'), created=data.get('created',''))
+    w = SharedWord(name=data['name'], primitives=','.join(data['primitives']), author=data.get('author', 'Anonymous'), source=data.get('source', '👤 User'), created=data.get('created', ''))
     db.session.add(w); db.session.commit()
     return jsonify({'id': w.id, 'status': 'ok'})
+
 
 @app.route('/shared/words/<int:word_id>/delete', methods=['DELETE'])
 def delete_shared_word(word_id):
@@ -738,17 +618,6 @@ def delete_shared_word(word_id):
     db.session.delete(w); db.session.commit()
     return jsonify({'status': 'ok'})
 
-@app.route('/shared/sentences')
-def shared_sentences():
-    sents = SharedSentence.query.order_by(SharedSentence.id.desc()).all()
-    return jsonify([{'id': s.id, 'name': s.name, 'words': s.words.split(','), 'created': s.created} for s in sents])
-
-@app.route('/shared/sentences/add', methods=['POST'])
-def add_shared_sentence():
-    data = request.get_json()
-    s = SharedSentence(name=data['name'], words=','.join(data['words']), created=data.get('created',''))
-    db.session.add(s); db.session.commit()
-    return jsonify({'id': s.id, 'status': 'ok'})
 
 if __name__ == '__main__':
     print("=" * 50)
