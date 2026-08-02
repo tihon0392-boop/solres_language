@@ -90,13 +90,13 @@ def generate_wave(frequency, duration_ms, volume=0.3, instrument='piano'):
     return (wave_data * envelope * volume).astype(np.float32)
 
 
-def generate_word_wav(notes, speed=1.0):
+def generate_word_wav(notes, speed=1.0, instrument='piano'):
     base_duration = int(400 / speed)
     combined = np.array([], dtype=np.float32)
     silence = np.zeros(int(SAMPLE_RATE * 0.03 / speed), dtype=np.float32)
     for i, note in enumerate(notes):
         dur = base_duration if i < len(notes) - 1 else int(600 / speed)
-        w = generate_wave(note.to_frequency(), dur)
+        w = generate_wave(note.to_frequency(), dur, instrument=instrument)
         combined = np.concatenate([combined, w, silence])
     audio_int16 = (combined * 32767).astype(np.int16)
     buf = io.BytesIO()
@@ -582,8 +582,23 @@ def translate():
 @app.route('/play')
 def play():
     word = request.args.get('word', '').strip()
+    instrument = request.args.get('instrument', 'piano')
     notes, _ = descriptors.describe_to_notes(word, Note(NoteName.DO, 4))
-    return send_file(generate_word_wav(notes, float(request.args.get('speed', '1.0'))), mimetype='audio/wav')
+    speed = float(request.args.get('speed', '1.0'))
+    base_duration = int(400 / speed)
+    combined = np.array([], dtype=np.float32)
+    silence = np.zeros(int(SAMPLE_RATE * 0.03 / speed), dtype=np.float32)
+    for i, note in enumerate(notes):
+        dur = base_duration if i < len(notes) - 1 else int(600 / speed)
+        w = generate_wave(note.to_frequency(), dur, instrument=instrument)
+        combined = np.concatenate([combined, w, silence])
+    audio_int16 = (combined * 32767).astype(np.int16)
+    buf = io.BytesIO()
+    with wave_module.open(buf, 'wb') as wf:
+        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
+        wf.writeframes(audio_int16.tobytes())
+    buf.seek(0)
+    return send_file(buf, mimetype='audio/wav')
 
 
 @app.route('/compose')
@@ -646,7 +661,7 @@ def compose_play():
 def piano_note():
     midi = int(request.args.get('midi', 60))
     instrument = request.args.get('instrument', 'piano')
-    w = generate_wave(midi_to_frequency(midi), 400, instrument=instrument)
+    w = generate_wave(midi_to_frequency(midi), 400, 0.3, instrument)
     audio_int16 = (w * 32767).astype(np.int16)
     buf = io.BytesIO()
     with wave_module.open(buf, 'wb') as wf:
