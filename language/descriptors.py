@@ -215,8 +215,15 @@ class DescriptorGrammar:
         }
 
     def _pattern_to_movements(self, pattern_str: str) -> list:
+        """
+        Превращает паттерн в плавные движения (2-3 полутона).
+        Усредняет интервалы для мягкого звучания.
+        """
         movements = []
         parts = pattern_str.split(",")
+
+        # Собираем все интервалы
+        intervals = []
         for part in parts:
             if part.endswith("_STATIC"):
                 continue
@@ -228,8 +235,26 @@ class DescriptorGrammar:
                 interval_name = part[:-5]
             else:
                 continue
-            interval_value = Interval[interval_name].value
-            movements.append((interval_value, direction))
+            intervals.append((Interval[interval_name].value, direction))
+
+        if not intervals:
+            return movements
+
+        # Плавный шаг: среднее арифметическое, ограниченное 2-4
+        avg_semitones = sum(abs(s) for s, _ in intervals) / len(intervals)
+        step = max(2, min(4, int(avg_semitones)))
+
+        # Направление: если большинство UP, то UP, иначе DOWN
+        up_count = sum(1 for _, d in intervals if d == 1)
+        direction = 1 if up_count >= len(intervals) / 2 else -1
+
+        # Одно плавное движение
+        movements.append((step, direction))
+
+        # Если было 2+ интервала — добавляем противоположное движение
+        if len(intervals) >= 2:
+            movements.append((step - 1, -direction))
+
         return movements
 
     def _midi_to_note(self, midi: int) -> Note:
@@ -284,9 +309,7 @@ class DescriptorGrammar:
                 movements = self._pattern_to_movements(prim["pattern"])
                 if movements:
                     semitones, direction = movements[0]
-                    # Ограничиваем скачок 2-4 полутонами для плавности
-                    step = max(2, min(4, semitones))
-                    current_midi += direction * step
+                    current_midi += direction * semitones
 
                     current_octave = (current_midi // 12) - 1
                     if current_octave > base_octave + 1:
