@@ -13,7 +13,27 @@ from core.constants import NoteName
 from language.primitives import SemanticPrimitives
 from language.descriptors import DescriptorGrammar
 
+from flask_sqlalchemy import SQLAlchemy
+
 app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///../solres.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+class SharedWord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    primitives = db.Column(db.String(500), nullable=False)
+    source = db.Column(db.String(50), default='👤 User')
+    created = db.Column(db.String(30))
+
+class SharedSentence(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    words = db.Column(db.String(500), nullable=False)
+    created = db.Column(db.String(30))
+
+
 primitives = SemanticPrimitives()
 descriptors = DescriptorGrammar()
 
@@ -225,7 +245,8 @@ HTML = r"""
             <div class="speed-row"><span>🐢</span><input type="range" id="pianoSpeed" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateSpeedLabel('pianoSpeed','pianoSpeedLabel')"><span>🐇</span><span id="pianoSpeedLabel" style="color:var(--accent);">1.0x</span></div>
             <div class="piano-buttons" style="margin-top:10px;">
                 <button class="btn btn-primary" onclick="pianoPlaySequence()">▶ Play & Analyze</button>
-                <button class="btn btn-sm" onclick="pianoClearSequence()">✕ Clear</button>
+                <button class="btn btn-sm" onclick="pianoUndoLastNote()">↩ Undo</button>
+                <button class="btn btn-sm" onclick="pianoClearSequence()">✕ Clear All</button>
                 <button class="btn btn-sm" onclick="pianoToCompose()">📋 To Compose</button>
             </div>
             <div id="pianoAnalysis"></div>
@@ -392,7 +413,9 @@ HTML = r"""
         function updatePianoRangeLabel() { const startMidi = (pianoOctave + 1) * 12; const s = NOTE_NAMES[startMidi%12].split('/')[0] + (Math.floor(startMidi/12)-1); const e = NOTE_NAMES[(startMidi+23)%12].split('/')[0] + (Math.floor((startMidi+23)/12)-1); document.getElementById('pianoRangeLabel').textContent = s + ' – ' + e; }
         function pianoShiftOctave(dir) { pianoOctave += dir; if (pianoOctave < 0) pianoOctave = 0; if (pianoOctave > 5) pianoOctave = 5; buildPiano(); }
         async function pianoKeyClick(midi, noteName) { pianoSequence.push({midi, noteName}); updatePianoSequenceDisplay(); const keys = document.querySelectorAll('#piano div[data-midi="' + midi + '"]'); keys.forEach(k => k.classList.add('active')); setTimeout(() => keys.forEach(k => k.classList.remove('active')), 300); const r = await fetch('/piano_note?midi=' + midi); new Audio(URL.createObjectURL(await r.blob())).play(); }
-        function updatePianoSequenceDisplay() { const div = document.getElementById('pianoSequence'); if (pianoSequence.length === 0) { div.textContent = 'Click keys to record a melody...'; div.style.color = 'var(--muted)'; } else { div.innerHTML = pianoSequence.map((s, i) => { const prev = i > 0 ? pianoSequence[i-1] : null; let interval = ''; if (prev) { const diff = s.midi - prev.midi; interval = `<span style="color:var(--muted);font-size:0.7em;"> [${diff>0?'+':''}${diff}]</span>`; } return `<span style="color:var(--accent2);">${s.noteName}</span>${interval}`; }).join(' → '); div.style.color = ''; } }
+        function updatePianoSequenceDisplay() { const div = document.getElementById('pianoSequence'); if (pianoSequence.length === 0) { div.textContent = 'Click keys to record a melody...'; div.style.color = 'var(--muted)'; } else { div.innerHTML = pianoSequence.map((s, i) => { const prev = i > 0 ? pianoSequence[i-1] : null; let interval = ''; if (prev) { const diff = s.midi - prev.midi; interval = `<span style="color:var(--muted);font-size:0.7em;"> [${diff>0?'+':''}${diff}]</span>`; } return `<span style="color:var(--accent2);cursor:pointer;" onclick="pianoRemoveNote(${i})" title="Click to remove">${s.noteName}</span>${interval}`; }).join(' → '); div.style.color = ''; } }
+        function pianoUndoLastNote() { pianoSequence.pop(); updatePianoSequenceDisplay(); }
+        function pianoRemoveNote(idx) { pianoSequence.splice(idx, 1); updatePianoSequenceDisplay(); }
         async function pianoPlaySequence() { if (pianoSequence.length === 0) return; const midis = pianoSequence.map(s => s.midi); for (let i = 0; i < midis.length; i++) { setTimeout(() => { const keys = document.querySelectorAll('#piano div[data-midi="' + midis[i] + '"]'); keys.forEach(k => k.classList.add('active')); setTimeout(() => keys.forEach(k => k.classList.remove('active')), 350); }, i * 400 / getSpeed('pianoSpeed')); } const r = await fetch('/piano_play?notes=' + encodeURIComponent(midis.join(',')) + '&speed=' + getSpeed('pianoSpeed')); const p = document.getElementById('pianoAudio'); p.style.display = 'block'; p.src = URL.createObjectURL(await r.blob()); p.play(); analyzeIntervals(midis); }
         async function analyzeIntervals(midis) { if (midis.length < 2) return; const intervals = []; for (let i = 1; i < midis.length; i++) intervals.push(midis[i] - midis[i-1]); const r = await fetch('/analyze?intervals=' + encodeURIComponent(intervals.join(','))); const data = await r.json(); lastAnalysis = data; let html = '<table class="analysis-table"><thead><tr><th>Note</th><th>Interval</th><th>Primitive</th></tr></thead><tbody>'; for (let i = 0; i < intervals.length; i++) { const diff = intervals[i], a = data.results[i], found = a && a.found; html += `<tr><td>${pianoSequence[i+1].noteName}</td><td class="${found?'found':'not-found'}">${diff>0?'+':''}${diff}</td><td class="${found?'found':'not-found'}">${found ? a.ru + ' (' + a.en + ')' : '—'}</td></tr>`; } html += '</tbody></table>'; if (data.word_found) html += `<div class="meaning" style="margin-top:8px;">✅ Word: <strong>${data.word_found}</strong></div>`; else if (data.all_found) html += `<div class="desc-row" style="margin-top:8px;">Primitives: ${data.primitives_ru.join(' + ')}</div>`; else html += `<div class="error-msg" style="margin-top:8px;">Some intervals not found.</div>`; html += `<div style="text-align:center;margin-top:8px;"><button class="btn btn-sm" onclick="savePianoAsWord()">💾 Save as My Word</button></div>`; document.getElementById('pianoAnalysis').innerHTML = html; }
         function savePianoAsWord() { if (!lastAnalysis || !lastAnalysis.primitives_ru || lastAnalysis.primitives_ru.length < 2) return; const name = prompt('Word name:', 'piano_' + Date.now()); if (!name) return; const myWords = getMyWords(); myWords.push({name, primitives: lastAnalysis.primitives_ru, source: '🎹 Instruments', created: new Date().toISOString()}); saveMyWords(myWords); document.getElementById('pianoSaveArea').innerHTML = '<div class="success-msg">Saved: ' + name + '</div>'; }
@@ -401,9 +424,20 @@ HTML = r"""
         buildPiano();
 
         // === MY WORDS ===
-        function loadMyWords() { const words = getMyWords(); let html = ''; words.forEach((w, i) => { html += `<tr><td>${w.name}</td><td>${(w.primitives||[]).join(', ')}</td><td><span class="badge ${w.source==='📖 System'?'badge-system':'badge-user'}">${w.source||'?'}</span></td><td><button class="btn-sm" onclick="playMyWord(${i})">▶</button></td><td><button class="btn-sm btn-danger" onclick="deleteMyWord(${i})">✕</button></td></tr>`; }); document.querySelector('#myWordsTable tbody').innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">No saved words yet.</td></tr>'; }
+        function loadMyWords() { const words = getMyWords(); let html = ''; words.forEach((w, i) => { html += `<tr><td>${w.name}</td><td>${(w.primitives||[]).join(', ')}</td><td><span class="badge ${w.source==='📖 System'?'badge-system':'badge-user'}">${w.source||'?'}</span></td><td><button class="btn-sm" onclick="playMyWord(${i})">▶</button></td><td><button class="btn-sm" onclick="publishMyWord(${i})" title="Publish to shared library">🌐</button></td><td><button class="btn-sm btn-danger" onclick="deleteMyWord(${i})">✕</button></td></tr>`; }); document.querySelector('#myWordsTable tbody').innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">No saved words yet.</td></tr>'; }
         async function playMyWord(idx) { const words = getMyWords(); if (!words[idx]) return; const ar = await fetch('/compose_play?words=' + encodeURIComponent((words[idx].primitives||[]).join(',')) + '&speed=' + getSpeed('mywordsSpeed')); new Audio(URL.createObjectURL(await ar.blob())).play(); }
         function deleteMyWord(idx) { const words = getMyWords(); words.splice(idx, 1); saveMyWords(words); loadMyWords(); }
+        async function publishMyWord(idx) {
+            const words = getMyWords();
+            if (!words[idx]) return;
+            const w = words[idx];
+            await fetch('/shared/words/add', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name: w.name, primitives: w.primitives, source: w.source, created: w.created})
+            });
+            alert('Published: ' + w.name);
+        }
         function clearMyWords() { if (confirm('Delete all?')) { saveMyWords([]); loadMyWords(); } }
 
         // === SENTENCES ===
@@ -621,6 +655,38 @@ def analyze():
             if data['ru'] == primitives_ru: word_found = word; break
     return jsonify({'results': results, 'all_found': all_found, 'primitives_ru': primitives_ru, 'word_found': word_found})
 
+with app.app_context():
+    db.create_all()
+
+@app.route('/shared/words')
+def shared_words():
+    words = SharedWord.query.order_by(SharedWord.id.desc()).all()
+    return jsonify([{'id': w.id, 'name': w.name, 'primitives': w.primitives.split(','), 'source': w.source, 'created': w.created} for w in words])
+
+@app.route('/shared/words/add', methods=['POST'])
+def add_shared_word():
+    data = request.get_json()
+    w = SharedWord(name=data['name'], primitives=','.join(data['primitives']), source=data.get('source','👤 User'), created=data.get('created',''))
+    db.session.add(w); db.session.commit()
+    return jsonify({'id': w.id, 'status': 'ok'})
+
+@app.route('/shared/words/<int:word_id>/delete', methods=['DELETE'])
+def delete_shared_word(word_id):
+    w = SharedWord.query.get_or_404(word_id)
+    db.session.delete(w); db.session.commit()
+    return jsonify({'status': 'ok'})
+
+@app.route('/shared/sentences')
+def shared_sentences():
+    sents = SharedSentence.query.order_by(SharedSentence.id.desc()).all()
+    return jsonify([{'id': s.id, 'name': s.name, 'words': s.words.split(','), 'created': s.created} for s in sents])
+
+@app.route('/shared/sentences/add', methods=['POST'])
+def add_shared_sentence():
+    data = request.get_json()
+    s = SharedSentence(name=data['name'], words=','.join(data['words']), created=data.get('created',''))
+    db.session.add(s); db.session.commit()
+    return jsonify({'id': s.id, 'status': 'ok'})
 
 if __name__ == '__main__':
     print("=" * 50)
