@@ -1,4 +1,4 @@
-# web/app.py — ПОЛНАЯ ЗАМЕНА
+# web/app.py
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -66,19 +66,25 @@ def generate_wave(frequency, duration_ms, volume=0.3, instrument='piano'):
         wave_data += np.sin(2 * np.pi * frequency * 2 * t) * 0.3
         attack = int(num_samples * 0.1)
         wave_data[:attack] *= np.linspace(0, 1, attack)
+        decay = np.exp(-2.0 * t / (duration_ms / 1000.0))
+        wave_data *= decay
     elif instrument == 'flute':
         wave_data = np.sin(2 * np.pi * frequency * t) * 1.0
         wave_data += np.sin(2 * np.pi * frequency * 2 * t) * 0.2
         wave_data += np.sin(2 * np.pi * frequency * 3 * t) * 0.1
+        decay = np.exp(-2.5 * t / (duration_ms / 1000.0))
+        wave_data *= decay
     elif instrument == 'organ':
         wave_data = (
-                np.sin(2 * np.pi * frequency * t) * 1.0 +
-                np.sin(2 * np.pi * frequency * 2 * t) * 0.7 +
-                np.sin(2 * np.pi * frequency * 3 * t) * 0.5 +
-                np.sin(2 * np.pi * frequency * 4 * t) * 0.3 +
-                np.sin(2 * np.pi * frequency * 5 * t) * 0.2 +
-                np.sin(2 * np.pi * frequency * 6 * t) * 0.1
+            np.sin(2 * np.pi * frequency * t) * 1.0 +
+            np.sin(2 * np.pi * frequency * 2 * t) * 0.7 +
+            np.sin(2 * np.pi * frequency * 3 * t) * 0.5 +
+            np.sin(2 * np.pi * frequency * 4 * t) * 0.3 +
+            np.sin(2 * np.pi * frequency * 5 * t) * 0.2 +
+            np.sin(2 * np.pi * frequency * 6 * t) * 0.1
         )
+        # Орган не затухает — это нормально, но громкость ограничим
+        wave_data *= 0.7
     else:
         wave_data = np.sin(2 * np.pi * frequency * t)
 
@@ -107,13 +113,13 @@ def generate_word_wav(notes, speed=1.0, instrument='piano'):
     return buf
 
 
-def generate_midi_wav(midi_notes, speed=1.0):
+def generate_midi_wav(midi_notes, speed=1.0, instrument='piano'):
     base_duration = int(400 / speed)
     combined = np.array([], dtype=np.float32)
     silence = np.zeros(int(SAMPLE_RATE * 0.03 / speed), dtype=np.float32)
     for i, midi in enumerate(midi_notes):
         dur = base_duration if i < len(midi_notes) - 1 else int(600 / speed)
-        w = generate_wave(midi_to_frequency(midi), dur)
+        w = generate_wave(midi_to_frequency(midi), dur, 0.3, instrument=instrument)
         combined = np.concatenate([combined, w, silence])
     audio_int16 = (combined * 32767).astype(np.int16)
     buf = io.BytesIO()
@@ -123,9 +129,8 @@ def generate_midi_wav(midi_notes, speed=1.0):
     buf.seek(0)
     return buf
 
-
-def generate_note_wav(midi_note, duration_ms=400):
-    w = generate_wave(midi_to_frequency(midi_note), duration_ms)
+def generate_note_wav(midi_note, duration_ms=400, instrument='piano'):
+    w = generate_wave(midi_to_frequency(midi_note), duration_ms, 0.3, instrument=instrument)
     audio_int16 = (w * 32767).astype(np.int16)
     buf = io.BytesIO()
     with wave_module.open(buf, 'wb') as wf:
@@ -245,12 +250,7 @@ HTML = r"""
         <header><div class="logo">🎵 SolRes</div><p class="subtitle">Universal musical language</p></header>
         <div class="top-row">
             <div class="stats"><div>Primitives <span>{{ primitives_count }}</span></div><div>Words <span>{{ descriptions_count }}</span></div></div>
-            <select id="globalInstrument" onchange="currentInstrument=this.value" style="padding:6px 10px;font-size:0.75em;border-radius:18px;background:var(--surface2);color:var(--text);border:1px solid rgba(255,255,255,0.08);margin-right:8px;">
-                <option value="piano">🎹 Piano</option>
-                <option value="violin">🎻 Violin</option>
-                <option value="flute">🎵 Flute</option>
-                <option value="organ">🎛️ Organ</option>
-            </select>
+            
             <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☀️ Light</button>
         </div>
         <div class="tabs">
@@ -379,13 +379,14 @@ HTML = r"""
     </div>
 
     <script>
+                let theme = 'dark', currentWord = '', pianoOctave = 3, pianoSequence = [], lastAnalysis = null, currentInstrument = 'piano';
         const CATEGORIES = {{ categories_json | safe }};
         const CATEGORY_ORDER = {{ category_order_json | safe }};
         const PRIMITIVE_INFO = {{ primitive_info_json | safe }};
         const DICTIONARY_WORDS = {{ dictionary_words_json | safe }};
         const SHARP_SEMITONES = [1,3,6,8,10];
         const NOTE_NAMES = ['C','C#/Db','D','D#/Eb','E','F','F#/Gb','G','G#/Ab','A','A#/Bb','B'];
-        let theme = 'dark', currentWord = '', pianoOctave = 3, pianoSequence = [], lastAnalysis = null;
+
 
         // === STARFIELD ===
         const canvas = document.getElementById('starfield'), ctx = canvas.getContext('2d'); let bodies = [];
@@ -436,7 +437,7 @@ HTML = r"""
         function saveComposedWord() { const {selected} = validateCompose(); if (selected.length < 2) return; const name = document.getElementById('composeWordName').value.trim() || 'word_' + Date.now(); const words = selected.map(s => s.word); const myWords = getMyWords(); myWords.push({name, primitives: words, source: '🧩 Compose', created: new Date().toISOString()}); saveMyWords(myWords); document.getElementById('composeError').innerHTML = '<div class="success-msg">Saved: ' + name + '</div>'; document.getElementById('composeWordName').value = ''; }
         buildComposeGrid();
 
-        // === PIANO ===
+        // === PIANO === 
         function buildPiano() { const piano = document.getElementById('piano'); piano.innerHTML = ''; const startMidi = (pianoOctave + 1) * 12; const WHITE_W = 36, BLACK_W = 20; const whiteSemitones = [0,2,4,5,7,9,11]; for (let oct = 0; oct < 2; oct++) { for (let w = 0; w < 7; w++) { const midi = startMidi + oct*12 + whiteSemitones[w]; const noteIdx = midi % 12, octave = Math.floor(midi/12)-1; const key = document.createElement('div'); key.className = 'white-key'; key.style.left = (oct*7 + w)*WHITE_W + 'px'; key.textContent = NOTE_NAMES[noteIdx].split('/')[0] + octave; key.dataset.midi = midi; key.onclick = () => pianoKeyClick(midi, NOTE_NAMES[noteIdx].split('/')[0] + octave); piano.appendChild(key); } } const blackPositions = [{wi:0, mo:1},{wi:1, mo:3},{wi:3, mo:6},{wi:4, mo:8},{wi:5, mo:10}]; for (let oct = 0; oct < 2; oct++) { for (let bp of blackPositions) { const midi = startMidi + oct*12 + bp.mo; const noteIdx = midi % 12, octave = Math.floor(midi/12)-1; const key = document.createElement('div'); key.className = 'black-key'; key.style.left = ((oct*7 + bp.wi)*WHITE_W + WHITE_W - BLACK_W/2) + 'px'; key.textContent = NOTE_NAMES[noteIdx]; key.dataset.midi = midi; key.onclick = (e) => { e.stopPropagation(); pianoKeyClick(midi, NOTE_NAMES[noteIdx].split('/')[0] + octave); }; piano.appendChild(key); } } updatePianoRangeLabel(); }
         function updatePianoRangeLabel() { const startMidi = (pianoOctave + 1) * 12; const s = NOTE_NAMES[startMidi%12].split('/')[0] + (Math.floor(startMidi/12)-1); const e = NOTE_NAMES[(startMidi+23)%12].split('/')[0] + (Math.floor((startMidi+23)/12)-1); document.getElementById('pianoRangeLabel').textContent = s + ' – ' + e; }
         function pianoShiftOctave(dir) { pianoOctave += dir; if (pianoOctave < 0) pianoOctave = 0; if (pianoOctave > 5) pianoOctave = 5; buildPiano(); }
@@ -449,7 +450,6 @@ HTML = r"""
         function savePianoAsWord() { if (!lastAnalysis || !lastAnalysis.primitives_ru || lastAnalysis.primitives_ru.length < 2) return; const name = prompt('Word name:', 'piano_' + Date.now()); if (!name) return; const myWords = getMyWords(); myWords.push({name, primitives: lastAnalysis.primitives_ru, source: '🎹 Instruments', created: new Date().toISOString()}); saveMyWords(myWords); document.getElementById('pianoSaveArea').innerHTML = '<div class="success-msg">Saved: ' + name + '</div>'; }
         function pianoClearSequence() { pianoSequence = []; updatePianoSequenceDisplay(); document.getElementById('pianoAudio').style.display = 'none'; document.getElementById('pianoAnalysis').innerHTML = ''; document.getElementById('pianoSaveArea').innerHTML = ''; lastAnalysis = null; }
         function pianoToCompose() { if (pianoSequence.length < 2) return; const intervals = []; for (let i = 1; i < pianoSequence.length; i++) intervals.push(pianoSequence[i].midi - pianoSequence[i-1].midi); switchTab('compose'); document.getElementById('composeError').innerHTML = `<div style="color:var(--accent);text-align:center;margin-top:10px;">Intervals from Piano: ${intervals.map(i=>(i>0?'+':'')+i).join(', ')}</div>`; }
-                let theme = 'dark', currentWord = '', pianoOctave = 3, pianoSequence = [], lastAnalysis = null, currentInstrument = 'piano';
         function instrumentChanged() {
             currentInstrument = document.getElementById('instrumentSelect').value;
         }
@@ -468,6 +468,16 @@ HTML = r"""
 
         // === SENTENCES ===
         function getAllWordsForSelect() { const myWords = getMyWords(); const dictWords = Object.entries(DICTIONARY_WORDS).map(([name, data]) => ({name, primitives: data.ru, source: '📖 System'})); return [...dictWords, ...myWords]; }
+                function showTutorial() {
+            const seen = localStorage.getItem('solres_tutorial_seen');
+            const overlay = document.getElementById('tutorialOverlay');
+            if (!seen && overlay) overlay.style.display = 'flex';
+        }
+        function closeTutorial() {
+            const overlay = document.getElementById('tutorialOverlay');
+            if (overlay) { overlay.style.display = 'none'; localStorage.setItem('solres_tutorial_seen', '1'); }
+        }
+        showTutorial();
         function loadSentenceRows() { document.getElementById('sentenceRows').innerHTML = ''; addSentenceRow(); }
         function addSentenceRow() { const allWords = getAllWordsForSelect(); const container = document.getElementById('sentenceRows'); const row = document.createElement('div'); row.className = 'sentence-row'; row.draggable = true; row.innerHTML = `<span class="drag-handle" draggable="true">⋮⋮</span><div class="dropdown-search"><input type="text" placeholder="🔍 Search word..." onfocus="toggleDropdown(this, true)" oninput="filterDropdown(this)" onblur="setTimeout(()=>toggleDropdown(this,false),200)"><div class="dropdown-list"></div></div><button class="btn-sm btn-danger" onclick="this.parentElement.remove()">✕</button>`; row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', Array.from(container.children).indexOf(row)); row.classList.add('dragging'); }); row.addEventListener('dragend', () => row.classList.remove('dragging')); row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag-over'); }); row.addEventListener('dragleave', () => row.classList.remove('drag-over')); row.addEventListener('drop', (e) => { e.preventDefault(); row.classList.remove('drag-over'); const from = parseInt(e.dataTransfer.getData('text/plain')); const to = Array.from(container.children).indexOf(row); if (from !== to && from >= 0 && to >= 0) { container.insertBefore(container.children[from], container.children[to + (from < to ? 1 : 0)]); } }); container.appendChild(row); buildDropdown(row.querySelector('.dropdown-list'), allWords.map(w => w.name), row.querySelector('input')); }
         async function playSentence() { const allWords = getAllWordsForSelect(); const selected = []; document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => { if (inp.value) { const w = allWords.find(aw => aw.name === inp.value); if (w) selected.push(w); } }); if (selected.length === 0) return; const allPrims = selected.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('sentSpeed')); const p = document.getElementById('sentenceAudio'); p.style.display = 'block'; p.src = URL.createObjectURL(await ar.blob()); p.play(); }
@@ -484,8 +494,16 @@ HTML = r"""
         // === TUTORIAL ===
         function showTutorial() {
             const seen = localStorage.getItem('solres_tutorial_seen');
-            if (!seen) {
-                document.getElementById('tutorialOverlay').style.display = 'flex';
+            const overlay = document.getElementById('tutorialOverlay');
+            if (!seen && overlay) {
+                overlay.style.display = 'flex';
+            }
+        }
+        function closeTutorial() {
+            const overlay = document.getElementById('tutorialOverlay');
+            if (overlay) {
+                overlay.style.display = 'none';
+                localStorage.setItem('solres_tutorial_seen', '1');
             }
         }
         function closeTutorial() {
@@ -499,7 +517,7 @@ HTML = r"""
     
 
     <!-- TUTORIAL OVERLAY -->
-    <div id="tutorialOverlay" style=" position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; align-items:center; justify-content:center;">
+    <div id="tutorialOverlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; align-items:center; justify-content:center;">
         <div style="background:var(--surface); border:1px solid var(--accent); border-radius:16px; padding:30px; max-width:500px; text-align:center; margin:20px;">
             <h2 style="color:var(--accent); margin-bottom:16px;">🎵 Welcome to SolRes!</h2>
             <div style="text-align:left; line-height:2; font-size:0.9em; color:var(--text);">
@@ -585,27 +603,6 @@ def translate():
     return jsonify({'notes': ' → '.join(nn), 'meaning': meaning, 'description': desc})
 
 
-@app.route('/play')
-def play():
-    word = request.args.get('word', '').strip()
-    instrument = request.args.get('instrument', 'piano')
-    notes, _ = descriptors.describe_to_notes(word, Note(NoteName.DO, 4))
-    speed = float(request.args.get('speed', '1.0'))
-    base_duration = int(400 / speed)
-    combined = np.array([], dtype=np.float32)
-    silence = np.zeros(int(SAMPLE_RATE * 0.03 / speed), dtype=np.float32)
-    for i, note in enumerate(notes):
-        dur = base_duration if i < len(notes) - 1 else int(600 / speed)
-        w = generate_wave(note.to_frequency(), dur, instrument=instrument)
-        combined = np.concatenate([combined, w, silence])
-    audio_int16 = (combined * 32767).astype(np.int16)
-    buf = io.BytesIO()
-    with wave_module.open(buf, 'wb') as wf:
-        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
-        wf.writeframes(audio_int16.tobytes())
-    buf.seek(0)
-    return send_file(buf, mimetype='audio/wav')
-
 
 @app.route('/compose')
 def compose():
@@ -687,7 +684,7 @@ def piano_play():
     silence = np.zeros(int(SAMPLE_RATE * 0.03 / speed), dtype=np.float32)
     for i, midi in enumerate(midi_notes):
         dur = base_duration if i < len(midi_notes) - 1 else int(600 / speed)
-        w = generate_wave(midi_to_frequency(midi), dur, instrument=instrument)
+        w = generate_wave(midi_to_frequency(midi), dur, 0.3, instrument=instrument)
         combined = np.concatenate([combined, w, silence])
     audio_int16 = (combined * 32767).astype(np.int16)
     buf = io.BytesIO()
