@@ -327,12 +327,27 @@ HTML = r"""
             <div class="table-wrap"><table id="myWordsTable"><thead><tr><th>Name</th><th>Primitives</th><th>Source</th><th style="width:24px;"></th><th style="width:24px;"></th><th style="width:24px;"></th></tr></thead><tbody></tbody></table></div>
         </div>
 
-        <!-- COMMUNITY -->
+               <!-- COMMUNITY -->
         <div class="card" id="tab-community" style="display:none;">
-            <button class="btn btn-sm" onclick="loadCommunityWords()" style="margin-bottom:10px;">🔄 Refresh</button>
-            <div class="table-wrap"><table id="communityTable"><thead><tr><th>Name</th><th>Primitives</th><th>Author</th><th>Rating</th><th style="width:24px;"></th></tr></thead><tbody></tbody></table></div>
+            <div class="tabs" style="margin-bottom:12px;">
+                <button class="tab active" onclick="switchCommunityTab('words')">📝 Words</button>
+                <button class="tab" onclick="switchCommunityTab('sentences')">💬 Sentences</button>
+                <button class="tab" onclick="switchCommunityTab('text')">📄 Text</button>
+            </div>
+            <button class="btn btn-sm" onclick="loadCommunityWords()" style="margin-bottom:10px;" id="communityRefresh">🔄 Refresh</button>
+            
+            <div id="community-words">
+                <div class="table-wrap"><table id="communityTable"><thead><tr><th>Name</th><th>Primitives</th><th>Author</th><th>Rating</th><th style="width:24px;"></th></tr></thead><tbody></tbody></table></div>
+            </div>
+            <div id="community-sentences" style="display:none;">
+                <div class="table-wrap"><table id="communitySentencesTable"><thead><tr><th>Name</th><th>Words</th><th>Author</th><th>Rating</th><th style="width:24px;"></th></tr></thead><tbody></tbody></table></div>
+            </div>
+            <div id="community-text" style="display:none;">
+                <div class="table-wrap"><table id="communityTextTable"><thead><tr><th>Name</th><th>Sentences</th><th>Author</th><th>Rating</th><th style="width:24px;"></th></tr></thead><tbody></tbody></table></div>
+            </div>
         </div>
-
+        
+        
         <!-- SENTENCES -->
         <div class="card" id="tab-sentences" style="display:none;">
             <div id="sentenceRows"></div>
@@ -382,7 +397,7 @@ HTML = r"""
     </div>
 
     <script>
-                let theme = 'dark', currentWord = '', pianoOctave = 3, pianoSequence = [], lastAnalysis = null, currentInstrument = 'piano';
+        let theme = 'dark', currentWord = '', pianoOctave = 3, pianoSequence = [], lastAnalysis = null, currentInstrument = 'piano';
         const CATEGORIES = {{ categories_json | safe }};
         const CATEGORY_ORDER = {{ category_order_json | safe }};
         const PRIMITIVE_INFO = {{ primitive_info_json | safe }};
@@ -499,6 +514,58 @@ HTML = r"""
                 </tr>`;
             });
             document.querySelector('#communityTable tbody').innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">No community words yet.</td></tr>';
+        }
+        
+                let communityTab = 'words';
+        
+        function switchCommunityTab(tab) {
+            communityTab = tab;
+            document.querySelectorAll('#tab-community .tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('community-words').style.display = tab === 'words' ? 'block' : 'none';
+            document.getElementById('community-sentences').style.display = tab === 'sentences' ? 'block' : 'none';
+            document.getElementById('community-text').style.display = tab === 'text' ? 'block' : 'none';
+            if (tab === 'words') loadCommunityWords();
+            if (tab === 'sentences') loadCommunitySentences();
+            if (tab === 'text') loadCommunityText();
+        }
+        
+        async function loadCommunitySentences() {
+            const r = await fetch('/shared/sentences');
+            const sentences = await r.json();
+            let html = '';
+            sentences.forEach(s => {
+                const score = (s.likes || 0) - (s.dislikes || 0);
+                html += `<tr>
+                    <td>${s.name}</td>
+                    <td>${(s.words||[]).join(', ')}</td>
+                    <td><span class="badge badge-community">${s.author||'Anonymous'}</span></td>
+                    <td>${score}</td>
+                    <td><button class="btn-sm" onclick="playCommunitySentence('${(s.words||[]).join(',')}')">▶</button></td>
+                </tr>`;
+            });
+            document.querySelector('#communitySentencesTable tbody').innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">No sentences yet.</td></tr>';
+        }
+        
+        async function loadCommunityText() {
+            const r = await fetch('/shared/sentences'); // Пока тот же эндпоинт
+            const texts = await r.json();
+            let html = '';
+            texts.forEach(t => {
+                html += `<tr>
+                    <td>${t.name}</td>
+                    <td>${(t.words||[]).join(' | ')}</td>
+                    <td><span class="badge badge-community">${t.author||'Anonymous'}</span></td>
+                    <td>—</td>
+                    <td><button class="btn-sm" onclick="playCommunitySentence('${(t.words||[]).join(',')}')">▶</button></td>
+                </tr>`;
+            });
+            document.querySelector('#communityTextTable tbody').innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">No texts yet.</td></tr>';
+        }
+        
+        async function playCommunitySentence(wordsStr) {
+            const ar = await fetch('/compose_play?words=' + encodeURIComponent(wordsStr) + '&speed=1.0');
+            new Audio(URL.createObjectURL(await ar.blob())).play();
         }
 
         async function voteWord(id, type) {
