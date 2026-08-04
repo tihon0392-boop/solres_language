@@ -31,8 +31,10 @@ class SharedWord(db.Model):
     name = db.Column(db.String(100), nullable=False)
     primitives = db.Column(db.String(500), nullable=False)
     author = db.Column(db.String(50), default='Anonymous')
-    source = db.Column(db.String(50), default='👤 User')
+    source = db.Column(db.String(50), default='User')
     created = db.Column(db.String(30))
+    likes = db.Column(db.Integer, default=0)
+    dislikes = db.Column(db.Integer, default=0)
 
 
 class SharedSentence(db.Model):
@@ -147,6 +149,7 @@ HTML = r"""
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SolRes — Universal Musical Language</title>
     <style>
+        #tutorialOverlay { display: none; }
         :root { --bg: #020210; --accent: #ff6a00; --accent2: #ff9500; --accent-glow: rgba(255,106,0,0.4); --surface: rgba(12,12,32,0.85); --surface2: rgba(20,20,50,0.9); --green: #00e676; --text: #d0d0e0; --muted: #707090; --red: #ff4757; --radius: 16px; --transition: 0.2s ease; }
         .light-theme { --bg: #f5f0e8; --accent: #7c3aed; --accent2: #a78bfa; --accent-glow: rgba(124,58,237,0.3); --surface: rgba(255,255,255,0.85); --surface2: rgba(240,235,225,0.9); --text: #1a1a2e; --muted: #6a6a7a; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -327,7 +330,7 @@ HTML = r"""
         <!-- COMMUNITY -->
         <div class="card" id="tab-community" style="display:none;">
             <button class="btn btn-sm" onclick="loadCommunityWords()" style="margin-bottom:10px;">🔄 Refresh</button>
-            <div class="table-wrap"><table id="communityTable"><thead><tr><th>Name</th><th>Primitives</th><th>Author</th><th style="width:24px;"></th></tr></thead><tbody></tbody></table></div>
+            <div class="table-wrap"><table id="communityTable"><thead><tr><th>Name</th><th>Primitives</th><th>Author</th><th>Rating</th><th style="width:24px;"></th></tr></thead><tbody></tbody></table></div>
         </div>
 
         <!-- SENTENCES -->
@@ -458,26 +461,54 @@ HTML = r"""
         // === MY WORDS ===
         function loadMyWords() { const words = getMyWords(); let html = ''; words.forEach((w, i) => { html += `<tr><td>${w.name}</td><td>${(w.primitives||[]).join(', ')}</td><td><span class="badge ${w.source==='📖 System'?'badge-system':'badge-user'}">${w.source||'?'}</span></td><td><button class="btn-sm" onclick="playMyWord(${i})">▶</button></td><td><button class="btn-sm" onclick="publishMyWord(${i})" title="Publish">🌐</button></td><td><button class="btn-sm btn-danger" onclick="deleteMyWord(${i})">✕</button></td></tr>`; }); document.querySelector('#myWordsTable tbody').innerHTML = html || '<tr><td colspan="6" style="text-align:center;color:var(--muted);">No saved words yet.</td></tr>'; }
         async function playMyWord(idx) { const words = getMyWords(); if (!words[idx]) return; const ar = await fetch('/compose_play?words=' + encodeURIComponent((words[idx].primitives||[]).join(',')) + '&speed=' + getSpeed('mywordsSpeed') + '&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
-        async function publishMyWord(idx) { const words = getMyWords(); if (!words[idx]) return; const w = words[idx]; const author = prompt('Your name (or leave empty for anonymous):', '') || 'Anonymous'; await fetch('/shared/words/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: w.name, primitives: w.primitives, source: w.source, created: w.created, author: author}) }); alert('Published: ' + w.name); }
+        async function publishMyWord(idx) {
+            const words = getMyWords();
+            if (!words[idx]) return;
+            const w = words[idx];
+            const author = prompt('Your name (or leave empty for anonymous):', '') || 'Anonymous';
+            await fetch('/shared/words/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-SolRes-Key': 'solres2026secret'
+                },
+                body: JSON.stringify({name: w.name, primitives: w.primitives, source: w.source, created: w.created, author: author})
+            });
+            alert('Published: ' + w.name);
+        }
         function deleteMyWord(idx) { const words = getMyWords(); words.splice(idx, 1); saveMyWords(words); loadMyWords(); }
         function clearMyWords() { if (confirm('Delete all?')) { saveMyWords([]); loadMyWords(); } }
 
         // === COMMUNITY ===
-        async function loadCommunityWords() { const r = await fetch('/shared/words'); const words = await r.json(); let html = ''; words.forEach(w => { html += `<tr><td>${w.name}</td><td>${(w.primitives||[]).join(', ')}</td><td><span class="badge badge-community">${w.author||'Anonymous'}</span></td><td><button class="btn-sm" onclick="playCommunityWord('${(w.primitives||[]).join(',')}')">▶</button></td></tr>`; }); document.querySelector('#communityTable tbody').innerHTML = html || '<tr><td colspan="4" style="text-align:center;color:var(--muted);">No community words yet. Be the first to publish!</td></tr>'; }
+        async function loadCommunityWords() {
+            const r = await fetch('/shared/words');
+            const words = await r.json();
+            let html = '';
+            words.forEach(w => {
+                const score = (w.likes || 0) - (w.dislikes || 0);
+                html += `<tr>
+                    <td>${w.name}</td>
+                    <td>${(w.primitives||[]).join(', ')}</td>
+                    <td><span class="badge badge-community">${w.author||'Anonymous'}</span></td>
+                    <td style="white-space:nowrap;">
+                        <button class="btn-xs" onclick="voteWord(${w.id},'like')">👍 ${w.likes||0}</button>
+                        <span style="margin:0 4px;color:${score>=0?'var(--green)':'var(--red)'};">${score}</span>
+                        <button class="btn-xs" onclick="voteWord(${w.id},'dislike')">👎 ${w.dislikes||0}</button>
+                    </td>
+                    <td><button class="btn-sm" onclick="playCommunityWord('${(w.primitives||[]).join(',')}')">▶</button></td>
+                </tr>`;
+            });
+            document.querySelector('#communityTable tbody').innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">No community words yet.</td></tr>';
+        }
+
+        async function voteWord(id, type) {
+            await fetch('/shared/words/' + id + '/' + type, { method: 'POST' });
+            loadCommunityWords();
+        }
         async function playCommunityWord(primitives) { const ar = await fetch('/compose_play?words=' + encodeURIComponent(primitives) + '&speed=1.0&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
 
         // === SENTENCES ===
-        function getAllWordsForSelect() { const myWords = getMyWords(); const dictWords = Object.entries(DICTIONARY_WORDS).map(([name, data]) => ({name, primitives: data.ru, source: '📖 System'})); return [...dictWords, ...myWords]; }
-                function showTutorial() {
-            const seen = localStorage.getItem('solres_tutorial_seen');
-            const overlay = document.getElementById('tutorialOverlay');
-            if (!seen && overlay) overlay.style.display = 'flex';
-        }
-        function closeTutorial() {
-            const overlay = document.getElementById('tutorialOverlay');
-            if (overlay) { overlay.style.display = 'none'; localStorage.setItem('solres_tutorial_seen', '1'); }
-        }
-        showTutorial();
+        function getAllWordsForSelect() { const myWords = getMyWords(); const dictWords = Object.entries(DICTIONARY_WORDS).map(([name, data]) => ({name, primitives: data.ru, source: '📖 System'})); return [...dictWords, ...myWords]; }           
         function loadSentenceRows() { document.getElementById('sentenceRows').innerHTML = ''; addSentenceRow(); }
         function addSentenceRow() { const allWords = getAllWordsForSelect(); const container = document.getElementById('sentenceRows'); const row = document.createElement('div'); row.className = 'sentence-row'; row.draggable = true; row.innerHTML = `<span class="drag-handle" draggable="true">⋮⋮</span><div class="dropdown-search"><input type="text" placeholder="🔍 Search word..." onfocus="toggleDropdown(this, true)" oninput="filterDropdown(this)" onblur="setTimeout(()=>toggleDropdown(this,false),200)"><div class="dropdown-list"></div></div><button class="btn-sm btn-danger" onclick="this.parentElement.remove()">✕</button>`; row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', Array.from(container.children).indexOf(row)); row.classList.add('dragging'); }); row.addEventListener('dragend', () => row.classList.remove('dragging')); row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag-over'); }); row.addEventListener('dragleave', () => row.classList.remove('drag-over')); row.addEventListener('drop', (e) => { e.preventDefault(); row.classList.remove('drag-over'); const from = parseInt(e.dataTransfer.getData('text/plain')); const to = Array.from(container.children).indexOf(row); if (from !== to && from >= 0 && to >= 0) { container.insertBefore(container.children[from], container.children[to + (from < to ? 1 : 0)]); } }); container.appendChild(row); buildDropdown(row.querySelector('.dropdown-list'), allWords.map(w => w.name), row.querySelector('input')); }
         async function playSentence() { const allWords = getAllWordsForSelect(); const selected = []; document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => { if (inp.value) { const w = allWords.find(aw => aw.name === inp.value); if (w) selected.push(w); } }); if (selected.length === 0) return; const allPrims = selected.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('sentSpeed')); const p = document.getElementById('sentenceAudio'); p.style.display = 'block'; p.src = URL.createObjectURL(await ar.blob()); p.play(); }
@@ -506,11 +537,9 @@ HTML = r"""
                 localStorage.setItem('solres_tutorial_seen', '1');
             }
         }
-        function closeTutorial() {
-            document.getElementById('tutorialOverlay').style.display = 'none';
-            localStorage.setItem('solres_tutorial_seen', '1');
-        }
-        showTutorial();
+        
+           
+        
 
         loadSentenceRows();
     </script>
@@ -534,6 +563,7 @@ HTML = r"""
             <button class="btn btn-primary" onclick="closeTutorial()" style="margin-top:20px; width:100%;">🚀 Get Started!</button>
         </div>
     </div>
+    <script>showTutorial();</script>
 </body>
 </html>
 """
@@ -723,19 +753,25 @@ def analyze():
     return jsonify({'results': results, 'all_found': all_found, 'primitives_ru': primitives_ru, 'word_found': word_found})
 
 
-with app.app_context():
-    db.create_all()
-
 
 @app.route('/shared/words')
 def shared_words():
     words = SharedWord.query.order_by(SharedWord.id.desc()).all()
-    return jsonify([{'id': w.id, 'name': w.name, 'primitives': w.primitives.split(','), 'author': w.author, 'source': w.source, 'created': w.created} for w in words])
-
+    return jsonify([{
+        'id': w.id, 'name': w.name,
+        'primitives': w.primitives.split(','),
+        'author': w.author, 'source': w.source,
+        'created': w.created,
+        'likes': w.likes or 0,
+        'dislikes': w.dislikes or 0
+    } for w in words])
 
 @app.route('/shared/words/add', methods=['POST'])
 def add_shared_word():
     data = request.get_json()
+    # Защита: только запросы с правильным ключом
+    if request.headers.get('X-SolRes-Key') != 'solres2026secret':
+        return jsonify({'error': 'Unauthorized'}), 403
     w = SharedWord(name=data['name'], primitives=','.join(data['primitives']), author=data.get('author', 'Anonymous'), source=data.get('source', '👤 User'), created=data.get('created', ''))
     db.session.add(w); db.session.commit()
     return jsonify({'id': w.id, 'status': 'ok'})
@@ -747,6 +783,28 @@ def delete_shared_word(word_id):
     db.session.delete(w); db.session.commit()
     return jsonify({'status': 'ok'})
 
+@app.route('/shared/words/<int:word_id>/like', methods=['POST'])
+def like_word(word_id):
+    w = SharedWord.query.get_or_404(word_id)
+    w.likes = (w.likes or 0) + 1
+    db.session.commit()
+    return jsonify({'id': w.id, 'likes': w.likes, 'dislikes': w.dislikes, 'score': (w.likes or 0) - (w.dislikes or 0)})
+
+@app.route('/shared/words/<int:word_id>/dislike', methods=['POST'])
+def dislike_word(word_id):
+    w = SharedWord.query.get_or_404(word_id)
+    w.dislikes = (w.dislikes or 0) + 1
+    db.session.commit()
+    # Автоудаление при -100
+    score = (w.likes or 0) - (w.dislikes or 0)
+    if score <= -100:
+        db.session.delete(w)
+        db.session.commit()
+        return jsonify({'deleted': True, 'score': score})
+    return jsonify({'id': w.id, 'likes': w.likes, 'dislikes': w.dislikes, 'score': score})
+
+with app.app_context():
+    db.create_all()
 
 if __name__ == '__main__':
     print("=" * 50)
