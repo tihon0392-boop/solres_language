@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template_string, request, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
+from config import SECRET_KEY
 import numpy as np
 import io
 import wave as wave_module
@@ -43,6 +44,8 @@ class SharedSentence(db.Model):
     words = db.Column(db.String(500), nullable=False)
     author = db.Column(db.String(50), default='Anonymous')
     created = db.Column(db.String(30))
+    likes = db.Column(db.Integer, default=0)
+    dislikes = db.Column(db.Integer, default=0)
 
 
 def midi_to_frequency(midi: int) -> float:
@@ -355,6 +358,7 @@ HTML = r"""
                 <button class="btn btn-sm" onclick="addSentenceRow()">+ Add Word</button>
                 <button class="btn btn-primary" onclick="playSentence()">▶ Play</button>
                 <button class="btn btn-sm" onclick="saveSentence()">💾 Save</button>
+                <button class="btn btn-sm" onclick="publishSentence()">🌐 Publish</button>
                 <button class="btn btn-sm" onclick="clearSentence()">✕ Clear</button>
             </div>
             <div><input type="text" id="sentenceName" placeholder="Sentence name (optional)" style="width:100%;margin-top:8px;"></div>
@@ -367,6 +371,7 @@ HTML = r"""
             <button class="btn btn-sm" onclick="loadText()" style="margin-bottom:10px;">🔄 Refresh</button>
             <button class="btn btn-primary" onclick="playText()" style="margin-bottom:10px;margin-left:6px;">▶ Play All</button>
             <button class="btn btn-sm btn-danger" onclick="clearText()" style="margin-bottom:10px;margin-left:6px;">🗑 Clear All</button>
+            <button class="btn btn-sm" onclick="publishText()" style="margin-bottom:10px;margin-left:6px;">🌐 Publish All</button>
             <div id="textList"></div>
             <div class="speed-row"><span>🐢</span><input type="range" id="textSpeed" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateSpeedLabel('textSpeed','textSpeedLabel')"><span>🐇</span><span id="textSpeedLabel" style="color:var(--accent);">1.0x</span></div>
             <audio id="textAudio" controls style="display:none;width:100%;margin-top:8px;"></audio>
@@ -424,7 +429,19 @@ HTML = r"""
         function getMyWords() { try { return JSON.parse(localStorage.getItem('solres_mywords') || '[]'); } catch(e) { return []; } }
         function saveMyWords(w) { localStorage.setItem('solres_mywords', JSON.stringify(w)); }
         function getSentences() { try { return JSON.parse(localStorage.getItem('solres_sentences') || '[]'); } catch(e) { return []; } }
-        function saveSentences(s) { localStorage.setItem('solres_sentences', JSON.stringify(s)); }
+        function saveSentence() { 
+            const name = document.getElementById('sentenceName').value.trim() || 'sentence_' + Date.now(); 
+            const wordNames = []; 
+            document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => { 
+                if (inp.value) wordNames.push(inp.value); 
+            }); 
+            if (wordNames.length < 2) return; 
+            const sentences = getSentences(); 
+            sentences.push({name, words: wordNames, created: new Date().toISOString()}); 
+            saveSentences(sentences); 
+            document.getElementById('sentenceName').value = ''; 
+            alert('Saved: ' + name); 
+        }
 
         // === SPEED ===
         function updateSpeedLabel(sliderId, labelId) { const val = parseFloat(document.getElementById(sliderId).value).toFixed(1); document.getElementById(labelId).textContent = val + 'x'; }
@@ -485,7 +502,7 @@ HTML = r"""
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-SolRes-Key': 'solres2026secret'
+                    'X-SolRes-Key': SECRET_KEY
                 },
                 body: JSON.stringify({name: w.name, primitives: w.primitives, source: w.source, created: w.created, author: author})
             });
@@ -540,11 +557,39 @@ HTML = r"""
                     <td>${s.name}</td>
                     <td>${(s.words||[]).join(', ')}</td>
                     <td><span class="badge badge-community">${s.author||'Anonymous'}</span></td>
-                    <td>${score}</td>
+                    <td style="white-space:nowrap;">
+                        <button class="btn-xs" onclick="voteSentence(${s.id},'like')">👍 ${s.likes||0}</button>
+                        <span style="margin:0 4px;color:${score>=0?'var(--green)':'var(--red)'};">${score}</span>
+                        <button class="btn-xs" onclick="voteSentence(${s.id},'dislike')">👎 ${s.dislikes||0}</button>
+                    </td>
                     <td><button class="btn-sm" onclick="playCommunitySentence('${(s.words||[]).join(',')}')">▶</button></td>
                 </tr>`;
             });
-            document.querySelector('#communitySentencesTable tbody').innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">No sentences yet.</td></tr>';
+            document.querySelector('#communitySentencesTable tbody').innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No published sentences yet.</td></tr>';
+        }
+        
+        async function voteSentence(id, type) {
+            await fetch('/shared/sentences/' + id + '/' + type, { method: 'POST' });
+            loadCommunitySentences();
+        }
+        
+        async function publishSentence() {
+            const name = document.getElementById('sentenceName').value.trim() || 'sentence_' + Date.now();
+            const wordNames = [];
+            document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => {
+                if (inp.value) wordNames.push(inp.value);
+            });
+            if (wordNames.length < 2) return;
+            const author = prompt('Your name (or leave empty for anonymous):', '') || 'Anonymous';
+            await fetch('/shared/sentences/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-SolRes-Key': SECRET_KEY
+                },
+                body: JSON.stringify({name, words: wordNames, author, created: new Date().toISOString()})
+            });
+            alert('Published: ' + name);
         }
         
         async function loadCommunityText() {
@@ -560,7 +605,7 @@ HTML = r"""
                     <td><button class="btn-sm" onclick="playCommunitySentence('${(t.words||[]).join(',')}')">▶</button></td>
                 </tr>`;
             });
-            document.querySelector('#communityTextTable tbody').innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">No texts yet.</td></tr>';
+            document.querySelector('#communityTextTable tbody').innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No published texts yet.</td></tr>';
         }
         
         async function playCommunitySentence(wordsStr) {
@@ -586,6 +631,22 @@ HTML = r"""
         function loadText() { const sentences = getSentences(); const container = document.getElementById('textList'); if (sentences.length === 0) { container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;">No saved sentences yet.</div>'; return; } container.innerHTML = sentences.map((s, i) => `<div class="sentence-row" draggable="true" data-idx="${i}"><span class="drag-handle" draggable="true">⋮⋮</span><span style="flex:1;">${s.name}: ${(s.words||[]).join(', ')}</span><button class="btn-sm" onclick="playTextSentence(${i})">▶</button><button class="btn-sm btn-danger" onclick="deleteTextSentence(${i})">✕</button></div>`).join(''); container.querySelectorAll('.sentence-row').forEach(row => { row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', row.dataset.idx); row.classList.add('dragging'); }); row.addEventListener('dragend', () => row.classList.remove('dragging')); row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag-over'); }); row.addEventListener('dragleave', () => row.classList.remove('drag-over')); row.addEventListener('drop', (e) => { e.preventDefault(); row.classList.remove('drag-over'); const from = parseInt(e.dataTransfer.getData('text/plain')); const to = parseInt(row.dataset.idx); if (from !== to && !isNaN(from) && !isNaN(to)) { const s = getSentences(); const [moved] = s.splice(from, 1); s.splice(to, 0, moved); saveSentences(s); loadText(); } }); }); }
         async function playText() { const sentences = getSentences(); if (sentences.length === 0) return; const allWords = getAllWordsForSelect(); for (const s of sentences) { const words = s.words.map(name => allWords.find(w => w.name === name)).filter(Boolean); if (words.length === 0) continue; const allPrims = words.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed') + '&instrument=' + currentInstrument); const a = new Audio(URL.createObjectURL(await ar.blob())); a.play(); await new Promise(r => { a.onended = r; setTimeout(r, 5000); }); } }
         async function playTextSentence(idx) { const sentences = getSentences(); if (!sentences[idx]) return; const allWords = getAllWordsForSelect(); const words = sentences[idx].words.map(name => allWords.find(w => w.name === name)).filter(Boolean); if (words.length === 0) return; const allPrims = words.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed') + '&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
+        async function publishText() {
+            const sentences = getSentences();
+            if (sentences.length === 0) { alert('Nothing to publish.'); return; }
+            const author = prompt('Your name:', '') || 'Anonymous';
+            const name = prompt('Text name:', 'text_' + Date.now()) || 'text_' + Date.now();
+            const allWords = sentences.flatMap(s => s.words || []);
+            await fetch('/shared/sentences/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-SolRes-Key': SECRET_KEY
+                },
+                body: JSON.stringify({name, words: allWords, author, created: new Date().toISOString()})
+            });
+            alert('Published: ' + name);
+        }
         function deleteTextSentence(idx) { const s = getSentences(); s.splice(idx, 1); saveSentences(s); loadText(); }
         function clearText() { if (confirm('Delete all?')) { saveSentences([]); loadText(); } }
         
@@ -837,7 +898,7 @@ def shared_words():
 def add_shared_word():
     data = request.get_json()
     # Защита: только запросы с правильным ключом
-    if request.headers.get('X-SolRes-Key') != 'solres2026secret':
+    if request.headers.get('X-SolRes-Key') != SECRET_KEY:
         return jsonify({'error': 'Unauthorized'}), 403
     w = SharedWord(name=data['name'], primitives=','.join(data['primitives']), author=data.get('author', 'Anonymous'), source=data.get('source', '👤 User'), created=data.get('created', ''))
     db.session.add(w); db.session.commit()
@@ -869,6 +930,45 @@ def dislike_word(word_id):
         db.session.commit()
         return jsonify({'deleted': True, 'score': score})
     return jsonify({'id': w.id, 'likes': w.likes, 'dislikes': w.dislikes, 'score': score})
+
+@app.route('/shared/sentences')
+def shared_sentences():
+    sents = SharedSentence.query.order_by(SharedSentence.id.desc()).all()
+    return jsonify([{
+        'id': s.id, 'name': s.name, 'words': s.words.split(','),
+        'author': s.author, 'created': s.created,
+        'likes': s.likes or 0, 'dislikes': s.dislikes or 0
+    } for s in sents])
+
+@app.route('/shared/sentences/<int:sent_id>/like', methods=['POST'])
+def like_sentence(sent_id):
+    s = SharedSentence.query.get_or_404(sent_id)
+    s.likes = (s.likes or 0) + 1
+    db.session.commit()
+    return jsonify({'id': s.id, 'likes': s.likes, 'dislikes': s.dislikes, 'score': (s.likes or 0) - (s.dislikes or 0)})
+
+@app.route('/shared/sentences/<int:sent_id>/dislike', methods=['POST'])
+def dislike_sentence(sent_id):
+    s = SharedSentence.query.get_or_404(sent_id)
+    s.dislikes = (s.dislikes or 0) + 1
+    db.session.commit()
+    score = (s.likes or 0) - (s.dislikes or 0)
+    if score <= -100:
+        db.session.delete(s)
+        db.session.commit()
+        return jsonify({'deleted': True, 'score': score})
+    return jsonify({'id': s.id, 'likes': s.likes, 'dislikes': s.dislikes, 'score': score})
+
+@app.route('/shared/sentences/add', methods=['POST'])
+def add_shared_sentence():
+    data = request.get_json()
+    if request.headers.get('X-SolRes-Key') != SECRET_KEY:
+        return jsonify({'error': 'Unauthorized'}), 403
+    s = SharedSentence(name=data['name'], words=','.join(data['words']), author=data.get('author', 'Anonymous'), created=data.get('created', ''))
+    db.session.add(s); db.session.commit()
+    return jsonify({'id': s.id, 'status': 'ok'})
+
+
 
 with app.app_context():
     db.create_all()
