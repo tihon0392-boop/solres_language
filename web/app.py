@@ -1,15 +1,16 @@
-# web/app.py
+# web/app.py — замените импорты и все 'solres2026secret' на SECRET_KEY
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template_string, request, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
-from config import SECRET_KEY
 import numpy as np
 import io
 import wave as wave_module
 
+from config import SECRET_KEY
 from core.interval_calculator import Note
 from core.constants import NoteName
 from language.primitives import SemanticPrimitives
@@ -42,6 +43,15 @@ class SharedSentence(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     words = db.Column(db.String(500), nullable=False)
+    author = db.Column(db.String(50), default='Anonymous')
+    created = db.Column(db.String(30))
+    likes = db.Column(db.Integer, default=0)
+    dislikes = db.Column(db.Integer, default=0)
+
+class SharedText(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    sentences = db.Column(db.String(1000), nullable=False)
     author = db.Column(db.String(50), default='Anonymous')
     created = db.Column(db.String(30))
     likes = db.Column(db.Integer, default=0)
@@ -81,14 +91,13 @@ def generate_wave(frequency, duration_ms, volume=0.3, instrument='piano'):
         wave_data *= decay
     elif instrument == 'organ':
         wave_data = (
-            np.sin(2 * np.pi * frequency * t) * 1.0 +
-            np.sin(2 * np.pi * frequency * 2 * t) * 0.7 +
-            np.sin(2 * np.pi * frequency * 3 * t) * 0.5 +
-            np.sin(2 * np.pi * frequency * 4 * t) * 0.3 +
-            np.sin(2 * np.pi * frequency * 5 * t) * 0.2 +
-            np.sin(2 * np.pi * frequency * 6 * t) * 0.1
+                np.sin(2 * np.pi * frequency * t) * 1.0 +
+                np.sin(2 * np.pi * frequency * 2 * t) * 0.7 +
+                np.sin(2 * np.pi * frequency * 3 * t) * 0.5 +
+                np.sin(2 * np.pi * frequency * 4 * t) * 0.3 +
+                np.sin(2 * np.pi * frequency * 5 * t) * 0.2 +
+                np.sin(2 * np.pi * frequency * 6 * t) * 0.1
         )
-        # Орган не затухает — это нормально, но громкость ограничим
         wave_data *= 0.7
     else:
         wave_data = np.sin(2 * np.pi * frequency * t)
@@ -112,7 +121,9 @@ def generate_word_wav(notes, speed=1.0, instrument='piano'):
     audio_int16 = (combined * 32767).astype(np.int16)
     buf = io.BytesIO()
     with wave_module.open(buf, 'wb') as wf:
-        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
+        wf.setnchannels(1);
+        wf.setsampwidth(2);
+        wf.setframerate(SAMPLE_RATE)
         wf.writeframes(audio_int16.tobytes())
     buf.seek(0)
     return buf
@@ -129,17 +140,22 @@ def generate_midi_wav(midi_notes, speed=1.0, instrument='piano'):
     audio_int16 = (combined * 32767).astype(np.int16)
     buf = io.BytesIO()
     with wave_module.open(buf, 'wb') as wf:
-        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
+        wf.setnchannels(1);
+        wf.setsampwidth(2);
+        wf.setframerate(SAMPLE_RATE)
         wf.writeframes(audio_int16.tobytes())
     buf.seek(0)
     return buf
+
 
 def generate_note_wav(midi_note, duration_ms=400, instrument='piano'):
     w = generate_wave(midi_to_frequency(midi_note), duration_ms, 0.3, instrument=instrument)
     audio_int16 = (w * 32767).astype(np.int16)
     buf = io.BytesIO()
     with wave_module.open(buf, 'wb') as wf:
-        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
+        wf.setnchannels(1);
+        wf.setsampwidth(2);
+        wf.setframerate(SAMPLE_RATE)
         wf.writeframes(audio_int16.tobytes())
     buf.seek(0)
     return buf
@@ -240,14 +256,49 @@ HTML = r"""
             .compose-row .dropdown-search { min-width: auto; } .compose-row input { font-size: 14px; padding: 10px; }
             .btn { padding: 10px 16px; font-size: 14px; } .btn-sm { padding: 8px 12px; font-size: 0.75em; }
             .compose-buttons .btn { flex: 1; min-width: 0; }
-            .white-key { width: 22px; height: 80px; font-size: 0.3em; } .black-key { width: 14px; height: 50px; font-size: 0.22em; }
-            .piano { height: 80px; width: 308px; } .piano-sequence { font-size: 0.7em; }
+            .white-key { width: 20px; height: 70px; font-size: 0.25em; padding-bottom: 2px; }
+            .black-key { width: 13px; height: 44px; font-size: 0.2em; }
+            .piano { height: 70px; width: 280px; }
+            .piano-sequence { font-size: 0.65em; }
             table { font-size: 0.7em; } th, td { padding: 6px; } .table-wrap { max-height: 250px; }
             .speed-row { gap: 4px; font-size: 0.7em; } .speed-row input[type=range] { width: 60px; }
             .search-row { flex-direction: column; } .search-row input, .search-row .btn { width: 100%; }
             .sentence-row { flex-wrap: wrap; } .sentence-row .dropdown-search { min-width: 120px; }
             .top-row { flex-direction: column; align-items: flex-start; } .stats { gap: 10px; font-size: 0.65em; }
         }
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--accent);
+            color: #000;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 0.9em;
+            z-index: 200;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); z-index: 150;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .modal-box {
+            background: var(--surface); border: 1px solid var(--accent);
+            border-radius: 16px; padding: 24px; text-align: center;
+            min-width: 280px;
+        }
+        .modal-box input {
+            width: 100%; margin: 12px 0; padding: 10px; font-size: 15px;
+            border-radius: 8px; border: 2px solid var(--surface2);
+            background: var(--surface2); color: var(--text);
+        }
+        .modal-box .btn { margin: 4px; }
     </style>
 </head>
 <body>
@@ -256,24 +307,27 @@ HTML = r"""
         <header><div class="logo">🎵 SolRes</div><p class="subtitle">Universal musical language</p></header>
         <div class="top-row">
             <div class="stats"><div>Primitives <span>{{ primitives_count }}</span></div><div>Words <span>{{ descriptions_count }}</span></div></div>
-            
+            <select id="langSelect" onchange="changeLanguage()" style="padding:6px 10px;font-size:0.75em;border-radius:18px;background:var(--surface2);color:var(--text);border:1px solid rgba(255,255,255,0.08);margin-right:8px;">
+                <option value="en">🇬🇧 EN</option>
+                <option value="ru">🇷🇺 RU</option>
+            </select>
             <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☀️ Light</button>
         </div>
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('translate')">🔍 Translate</button>
-            <button class="tab" onclick="switchTab('compose')">🧩 Compose</button>
-            <button class="tab" onclick="switchTab('instruments')">🎸 Instruments</button>
-            <button class="tab" onclick="switchTab('mywords')">📝 My Words</button>
-            <button class="tab" onclick="switchTab('community')">🌐 Community</button>
-            <button class="tab" onclick="switchTab('sentences')">💬 Sentences</button>
-            <button class="tab" onclick="switchTab('text')">📄 Text</button>
-            <button class="tab" onclick="switchTab('dictionary')">📖 Dictionary</button>
-            <button class="tab" onclick="switchTab('rules')">📋 Rules</button>
+            <button class="tab active" data-lang="translate" onclick="switchTab('translate')">🔍 Translate</button>
+            <button class="tab" data-lang="compose" onclick="switchTab('compose')">🧩 Compose</button>
+            <button class="tab" data-lang="instruments" onclick="switchTab('instruments')">🎸 Instruments</button>
+            <button class="tab" data-lang="mywords" onclick="switchTab('mywords')">📝 My Words</button>
+            <button class="tab" data-lang="sentences" onclick="switchTab('sentences')">💬 Sentences</button>
+            <button class="tab" data-lang="text" onclick="switchTab('text')">📄 Text</button>
+            <button class="tab" data-lang="community" onclick="switchTab('community')">🌐 Community</button>
+            <button class="tab" data-lang="dictionary" onclick="switchTab('dictionary')">📖 Dictionary</button>
+            <button class="tab" data-lang="rules" onclick="switchTab('rules')">📋 Rules</button>
         </div>
 
         <!-- TRANSLATE -->
         <div class="card" id="tab-translate">
-            <div class="search-row"><input type="text" id="wordInput" placeholder="Enter a word..." onkeypress="if(event.key==='Enter') translateWord()"><button class="btn btn-primary" onclick="translateWord()">🔍 Translate</button></div>
+            <div class="search-row"><input type="text" id="wordInput" placeholder="Enter a word..." onkeypress="if(event.key==='Enter') translateWord()"><button class="btn btn-primary" data-lang="translate" onclick="translateWord()">🔍 Translate</button></div>
             <div id="result"><div style="text-align:center;color:var(--muted);opacity:0.5;">Type a word to see its description and hear its melody</div></div>
             <div class="speed-row"><span>🐢</span><input type="range" id="speedSlider" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateSpeedLabel('speedSlider','speedLabel')"><span>🐇</span><span id="speedLabel" style="color:var(--accent);">1.0x</span></div>
             <audio id="audioPlayer" controls style="display:none"></audio>
@@ -283,10 +337,11 @@ HTML = r"""
         <div class="card" id="tab-compose" style="display:none;">
             <div class="compose-grid" id="composeGrid"></div>
             <div class="compose-buttons">
-                <button class="btn btn-primary" onclick="composePlay()">▶ Play</button>
-                <button class="btn btn-sm" onclick="composeRandom()">✨ Random</button>
-                <button class="btn btn-sm" onclick="composeClear()">✕ Clear All</button>
-                <button class="btn btn-sm" onclick="saveComposedWord()">💾 Save to My Words</button>
+                <button class="btn btn-primary" data-lang="play" onclick="composePlay()">▶ Play</button>
+                <button class="btn btn-sm" data-lang="saveAsWord" onclick="saveComposedWord()">💾 Save to My Words</button>
+                <button class="btn btn-sm" data-lang="random" onclick="composeRandom()">✨ Random</button>
+                <button class="btn btn-sm" data-lang="clearAll" onclick="composeClear()">✕ Clear All</button>
+                
             </div>
             <div><input type="text" id="composeWordName" placeholder="Word name (optional)" style="width:100%;margin-top:8px;"></div>
             <div class="speed-row"><span>🐢</span><input type="range" id="composeSpeed" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateSpeedLabel('composeSpeed','composeSpeedLabel')"><span>🐇</span><span id="composeSpeedLabel" style="color:var(--accent);">1.0x</span></div>
@@ -312,10 +367,10 @@ HTML = r"""
             <div class="piano-container"><div class="piano" id="piano"></div></div>
             <div class="speed-row"><span>🐢</span><input type="range" id="pianoSpeed" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateSpeedLabel('pianoSpeed','pianoSpeedLabel')"><span>🐇</span><span id="pianoSpeedLabel" style="color:var(--accent);">1.0x</span></div>
             <div class="piano-buttons" style="margin-top:10px;">
-                <button class="btn btn-primary" onclick="pianoPlaySequence()">▶ Play & Analyze</button>
-                <button class="btn btn-sm" onclick="pianoUndoLastNote()">↩ Undo</button>
-                <button class="btn btn-sm" onclick="pianoClearSequence()">✕ Clear All</button>
-                <button class="btn btn-sm" onclick="pianoToCompose()">📋 To Compose</button>
+                <button class="btn btn-primary" data-lang="playAnalyze" onclick="pianoPlaySequence()">▶ Play & Analyze</button>
+                <button class="btn btn-sm" data-lang="undo" onclick="pianoUndoLastNote()">↩ Undo</button>
+                <button class="btn btn-sm" data-lang="clearAll" onclick="pianoClearSequence()">✕ Clear All</button>
+                <button class="btn btn-sm" data-lang="toCompose" onclick="pianoToCompose()">📋 To Compose</button>
             </div>
             <div id="pianoAnalysis"></div>
             <div id="pianoSaveArea" style="margin-top:8px;"></div>
@@ -324,21 +379,21 @@ HTML = r"""
 
         <!-- MY WORDS -->
         <div class="card" id="tab-mywords" style="display:none;">
-            <button class="btn btn-sm" onclick="loadMyWords()" style="margin-bottom:10px;">🔄 Refresh</button>
-            <button class="btn btn-sm btn-danger" onclick="clearMyWords()" style="margin-bottom:10px;margin-left:6px;">🗑 Clear All</button>
+            <button class="btn btn-sm" data-lang="refresh" onclick="loadMyWords()" style="margin-bottom:10px;">🔄 Refresh</button>
+            <button class="btn btn-sm btn-danger" data-lang="clearAll" onclick="clearMyWords()" style="margin-bottom:10px;margin-left:6px;">🗑 Clear All</button>
             <div class="speed-row"><span>🐢</span><input type="range" id="mywordsSpeed" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateSpeedLabel('mywordsSpeed','mywordsSpeedLabel')"><span>🐇</span><span id="mywordsSpeedLabel" style="color:var(--accent);">1.0x</span></div>
             <div class="table-wrap"><table id="myWordsTable"><thead><tr><th>Name</th><th>Primitives</th><th>Source</th><th style="width:24px;"></th><th style="width:24px;"></th><th style="width:24px;"></th></tr></thead><tbody></tbody></table></div>
         </div>
 
-               <!-- COMMUNITY -->
+        <!-- COMMUNITY -->
         <div class="card" id="tab-community" style="display:none;">
             <div class="tabs" style="margin-bottom:12px;">
-                <button class="tab active" onclick="switchCommunityTab('words')">📝 Words</button>
-                <button class="tab" onclick="switchCommunityTab('sentences')">💬 Sentences</button>
-                <button class="tab" onclick="switchCommunityTab('text')">📄 Text</button>
+                <button class="tab active" data-lang="words" onclick="switchCommunityTab('words')">📝 Words</button>
+                <button class="tab" data-lang="sentences" onclick="switchCommunityTab('sentences')">💬 Sentences</button>
+                <button class="tab" data-lang="text" onclick="switchCommunityTab('text')">📄 Text</button>
             </div>
-            <button class="btn btn-sm" onclick="loadCommunityWords()" style="margin-bottom:10px;" id="communityRefresh">🔄 Refresh</button>
-            
+            <button class="btn btn-sm" data-lang="refresh" onclick="loadCommunityWords()" style="margin-bottom:10px;" id="communityRefresh">🔄 Refresh</button>
+            <div class="speed-row"><span>🐢</span><input type="range" id="communitySpeed" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateSpeedLabel('communitySpeed','communitySpeedLabel')"><span>🐇</span><span id="communitySpeedLabel" style="color:var(--accent);">1.0x</span></div>
             <div id="community-words">
                 <div class="table-wrap"><table id="communityTable"><thead><tr><th>Name</th><th>Primitives</th><th>Author</th><th>Rating</th><th style="width:24px;"></th></tr></thead><tbody></tbody></table></div>
             </div>
@@ -349,17 +404,17 @@ HTML = r"""
                 <div class="table-wrap"><table id="communityTextTable"><thead><tr><th>Name</th><th>Sentences</th><th>Author</th><th>Rating</th><th style="width:24px;"></th></tr></thead><tbody></tbody></table></div>
             </div>
         </div>
-        
-        
+
         <!-- SENTENCES -->
         <div class="card" id="tab-sentences" style="display:none;">
+            <div id="sentenceEmpty" style="text-align:center;color:var(--muted);padding:20px;">No saved sentences yet.</div>
             <div id="sentenceRows"></div>
             <div class="compose-buttons">
-                <button class="btn btn-sm" onclick="addSentenceRow()">+ Add Word</button>
-                <button class="btn btn-primary" onclick="playSentence()">▶ Play</button>
-                <button class="btn btn-sm" onclick="saveSentence()">💾 Save</button>
-                <button class="btn btn-sm" onclick="publishSentence()">🌐 Publish</button>
-                <button class="btn btn-sm" onclick="clearSentence()">✕ Clear</button>
+                <button class="btn btn-sm" data-lang="addWord" onclick="addSentenceRow()">+ Add Word</button>
+                <button class="btn btn-primary" data-lang="play" onclick="playSentence()">▶ Play</button>
+                <button class="btn btn-sm" data-lang="save" onclick="saveSentence()">💾 Save</button>
+                <button class="btn btn-sm" data-lang="publish" onclick="publishSentence()">🌐 Publish</button>
+                <button class="btn btn-sm" data-lang="clear" onclick="clearSentence()">✕ Clear</button>
             </div>
             <div><input type="text" id="sentenceName" placeholder="Sentence name (optional)" style="width:100%;margin-top:8px;"></div>
             <div class="speed-row"><span>🐢</span><input type="range" id="sentSpeed" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateSpeedLabel('sentSpeed','sentSpeedLabel')"><span>🐇</span><span id="sentSpeedLabel" style="color:var(--accent);">1.0x</span></div>
@@ -368,10 +423,10 @@ HTML = r"""
 
         <!-- TEXT -->
         <div class="card" id="tab-text" style="display:none;">
-            <button class="btn btn-sm" onclick="loadText()" style="margin-bottom:10px;">🔄 Refresh</button>
-            <button class="btn btn-primary" onclick="playText()" style="margin-bottom:10px;margin-left:6px;">▶ Play All</button>
-            <button class="btn btn-sm btn-danger" onclick="clearText()" style="margin-bottom:10px;margin-left:6px;">🗑 Clear All</button>
-            <button class="btn btn-sm" onclick="publishText()" style="margin-bottom:10px;margin-left:6px;">🌐 Publish All</button>
+            <button class="btn btn-sm" data-lang="refresh" onclick="loadText()" style="margin-bottom:10px;">🔄 Refresh</button>
+            <button class="btn btn-primary" data-lang="playAll" onclick="playText()" style="margin-bottom:10px;margin-left:6px;">▶ Play All</button>
+            <button class="btn btn-sm" data-lang="publishAll" onclick="publishText()" style="margin-bottom:10px;margin-left:6px;">🌐 Publish All</button>
+            <button class="btn btn-sm btn-danger" data-lang="clearAll" onclick="clearText()" style="margin-bottom:10px;margin-left:6px;">🗑 Clear All</button>
             <div id="textList"></div>
             <div class="speed-row"><span>🐢</span><input type="range" id="textSpeed" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateSpeedLabel('textSpeed','textSpeedLabel')"><span>🐇</span><span id="textSpeedLabel" style="color:var(--accent);">1.0x</span></div>
             <audio id="textAudio" controls style="display:none;width:100%;margin-top:8px;"></audio>
@@ -381,22 +436,22 @@ HTML = r"""
         <div class="card" id="tab-dictionary" style="display:none;">
             <div class="search-row"><input type="text" id="dictSearch" placeholder="Search..." oninput="filterDict()"></div>
             <h3 style="margin:10px 0 6px;color:var(--accent);">🔤 Primitives <span style="color:var(--muted);">({{ primitives_count }})</span></h3>
-            <div class="table-wrap"><table id="primitivesTable"><thead><tr><th>Category</th><th>RU</th><th>EN</th><th>Pattern</th></tr></thead><tbody>{{ primitives_rows | safe }}</tbody></table></div>
+            <div class="table-wrap"><table id="primitivesTable"><thead><tr><th data-lang="category">Category</th><th data-lang="ru">RU</th><th data-lang="en">EN</th><th data-lang="pattern">Pattern</th></tr></thead><tbody>{{ primitives_rows | safe }}</tbody></table></div>
             <h3 style="margin:14px 0 6px;color:var(--accent);">📝 Words <span style="color:var(--muted);">({{ descriptions_count }})</span></h3>
-            <div class="table-wrap"><table id="wordsTable"><thead><tr><th>Word</th><th>EN</th><th>Description</th><th style="width:24px;"></th></tr></thead><tbody>{{ words_rows | safe }}</tbody></table></div>
+            <div class="table-wrap"><table id="wordsTable"><thead><tr><th data-lang="ru">Word</th><th data-lang="en">EN</th><th data-lang="description">Description</th><th style="width:24px;"></th></tr></thead><tbody>{{ words_rows | safe }}</tbody></table></div>
         </div>
 
         <!-- RULES -->
         <div class="card" id="tab-rules" style="display:none;">
             <h3 style="color:var(--accent);margin-bottom:10px;">📋 Rules</h3>
             <ol class="rules-list">
-                <li><strong>Alphabet:</strong> 7 notes — <em>Do, Re, Mi, Fa, Sol, La, Si</em></li>
-                <li><strong>Words = intervals</strong> between notes.</li>
-                <li><strong>Direction:</strong> Up = light/active, Down = dark/passive.</li>
-                <li><strong>135+ primitives</strong> in 12 fixed categories.</li>
-                <li><strong>Order:</strong> Existence → Size → Physics → Material → Shape → Color → Action → Relation → Value → Quantity → Space → Time</li>
-                <li><strong>Flexible:</strong> 2–12 primitives per word.</li>
-                <li><strong>Community:</strong> <a href="https://github.com/tihon0392-boop/solres_language/discussions" target="_blank" style="color:var(--accent);">GitHub Discussions</a></li>
+                <li><span data-lang="rule1"><strong>Alphabet:</strong> 7 notes — <em>Do, Re, Mi, Fa, Sol, La, Si</em></span></li>
+                <li><span data-lang="rule2"><strong>Words = intervals</strong> between notes.</span></li>
+                <li><span data-lang="rule3"><strong>Direction:</strong> Up = light/active, Down = dark/passive.</span></li>
+                <li><span data-lang="rule4"><strong>135+ primitives</strong> in 12 fixed categories.</span></li>
+                <li><span data-lang="rule5"><strong>Order:</strong> Existence → Size → Physics → Material → Shape → Color → Action → Relation → Value → Quantity → Space → Time</span></li>
+                <li><span data-lang="rule6"><strong>Flexible:</strong> 2–12 primitives per word.</span></li>
+                <li><span data-lang="rule7"><strong>Community:</strong> <a href="https://github.com/tihon0392-boop/solres_language/discussions" target="_blank" style="color:var(--accent);">GitHub Discussions</a></span></li>
             </ol>
         </div>
     </div>
@@ -408,8 +463,151 @@ HTML = r"""
         const PRIMITIVE_INFO = {{ primitive_info_json | safe }};
         const DICTIONARY_WORDS = {{ dictionary_words_json | safe }};
         const SHARP_SEMITONES = [1,3,6,8,10];
+        const SECRET_KEY = '{{ secret_key | safe }}';
         const NOTE_NAMES = ['C','C#/Db','D','D#/Eb','E','F','F#/Gb','G','G#/Ab','A','A#/Bb','B'];
-
+        const LANG = {
+        
+            categories: {
+                'существование': 'existence',
+                'свойство:размер': 'size',
+                'свойство:физические': 'physics',
+                'материал': 'material',
+                'форма': 'shape',
+                'свойство:цвет': 'color',
+                'действие': 'action',
+                'отношение': 'relation',
+                'оценка': 'value',
+                'количество': 'quantity',
+                'пространство': 'space',
+                'время': 'time'
+            },
+            ru: {
+                translate: '🔍 Перевод', compose: '🧩 Собрать', instruments: '🎸 Инструменты',
+                mywords: '📝 Мои слова', sentences: '💬 Предложения', text: '📄 Текст',
+                community: '🌐 Сообщество', dictionary: '📖 Словарь', rules: '📋 Правила',
+                play: '▶ Играть', save: '💾 Сохранить', publish: '🌐 Опубликовать',
+                refresh: '🔄 Обновить', clear: '✕ Очистить', undo: '↩ Отмена',
+                speed: 'Скорость', search: '🔍 Искать...',
+                noWords: 'Нет сохранённых слов.', noSentences: 'Нет сохранённых предложений.',
+                noCommunityWords: 'Нет опубликованных слов.', noCommunitySentences: 'Нет опубликованных предложений.',
+                noCommunityTexts: 'Нет опубликованных текстов.', typeWord: 'Введите слово...',
+                recordMelody: 'Нажмите клавиши для записи...', welcome: '🎵 Добро пожаловать в SolRes!',
+                getStarted: '🚀 Начать!',
+                tutorial1: '🔍 <b>Перевод</b> — введите слово, услышьте мелодию',
+                tutorial2: '🧩 <b>Сборка</b> — создайте слово из 135+ примитивов',
+                tutorial3: '🎸 <b>Инструменты</b> — играйте на пианино',
+                tutorial4: '📝 <b>Мои слова</b> — сохраняйте свои слова',
+                tutorial5: '🌐 <b>Сообщество</b> — смотрите слова других',
+                tutorial6: '💬 <b>Предложения</b> — соединяйте слова',
+                tutorial7: '📄 <b>Текст</b> — создавайте текст',
+                tutorial8: '⚡ <b>Скорость</b> — меняйте темп',
+                tutorial9: '☀️ <b>Тема</b> — светлая/тёмная',
+                primitives: 'Примитивы', words: 'Слова', category: 'Категория', pattern: 'Паттерн',
+                author: 'Автор', rating: 'Рейтинг', name: 'Название', source: 'Источник',
+                light: '☀️ Светлая', dark: '🌙 Тёмная', addWord: '+ Слово',
+                playAll: '▶ Играть всё', publishAll: '🌐 Опубликовать всё',
+                clearAll: '🗑 Очистить всё', searchWord: '🔍 Искать слово...',
+                sentenceName: 'Название предложения', wordName: 'Название слова',
+                description: 'Описание', noTexts: 'Нет сохранённых предложений.',
+                enterWord: 'Введите слово...', playAnalyze: '▶ Играть и анализировать',
+                toCompose: '📋 В сборку', saveAsWord: '💾 Сохранить как слово',
+                yourName: 'Ваше имя', enterName: 'Введите имя...',
+                textName: 'Название текста', enterTextName: 'Введите название текста...',
+                nothingToPublish: 'Нечего публиковать.', select2words: 'Выберите минимум 2 слова',
+                published: 'Опубликовано: ', saved: 'Сохранено: ',
+                ru: 'RU',
+                rule1: '<strong>Алфавит:</strong> 7 нот — <em>До, Ре, Ми, Фа, Соль, Ля, Си</em>',
+                rule2: '<strong>Слова = интервалы</strong> между нотами.',
+                rule3: '<strong>Направление:</strong> Вверх = свет/активность, Вниз = тьма/пассив.',
+                rule4: '<strong>135+ примитивов</strong> в 12 фиксированных категориях.',
+                rule5: '<strong>Порядок:</strong> Существование → Размер → Физика → Материал → Форма → Цвет → Действие → Отношение → Оценка → Количество → Пространство → Время',
+                rule6: '<strong>Гибкость:</strong> 2–12 примитивов на слово.',
+                rule7: '<strong>Сообщество:</strong> <a href="https://github.com/tihon0392-boop/solres_language/discussions" target="_blank" style="color:var(--accent);">GitHub Discussions</a>',
+            },
+            en: {
+                translate: '🔍 Translate', compose: '🧩 Compose', instruments: '🎸 Instruments',
+                mywords: '📝 My Words', sentences: '💬 Sentences', text: '📄 Text',
+                community: '🌐 Community', dictionary: '📖 Dictionary', rules: '📋 Rules',
+                play: '▶ Play', save: '💾 Save', publish: '🌐 Publish',
+                refresh: '🔄 Refresh', clear: '✕ Clear', undo: '↩ Undo',
+                speed: 'Speed', search: '🔍 Search...',
+                noWords: 'No saved words yet.', noSentences: 'No saved sentences yet.',
+                noCommunityWords: 'No community words yet.', noCommunitySentences: 'No published sentences yet.',
+                noCommunityTexts: 'No published texts yet.', typeWord: 'Type a word...',
+                recordMelody: 'Click keys to record...', welcome: '🎵 Welcome to SolRes!',
+                getStarted: '🚀 Get Started!',
+                tutorial1: '🔍 <b>Translate</b> — type a word, hear its melody',
+                tutorial2: '🧩 <b>Compose</b> — build words from 135+ primitives',
+                tutorial3: '🎸 <b>Instruments</b> — play piano, analyze intervals',
+                tutorial4: '📝 <b>My Words</b> — save your custom words',
+                tutorial5: '🌐 <b>Community</b> — explore words from others',
+                tutorial6: '💬 <b>Sentences</b> — chain words together',
+                tutorial7: '📄 <b>Text</b> — build text from sentences',
+                tutorial8: '⚡ <b>Speed slider</b> — adjust playback speed',
+                tutorial9: '☀️ <b>Theme toggle</b> — switch dark/light mode',
+                primitives: 'Primitives', words: 'Words', category: 'Category', pattern: 'Pattern',
+                author: 'Author', rating: 'Rating', name: 'Name', source: 'Source',
+                light: '☀️ Light', dark: '🌙 Dark', addWord: '+ Add Word',
+                playAll: '▶ Play All', publishAll: '🌐 Publish All',
+                clearAll: '🗑 Clear All', searchWord: '🔍 Search word...',
+                sentenceName: 'Sentence name', wordName: 'Word name',
+                description: 'Description', noTexts: 'No saved sentences yet.',
+                enterWord: 'Enter a word...', playAnalyze: '▶ Play & Analyze',
+                toCompose: '📋 To Compose', saveAsWord: '💾 Save as My Word',
+                yourName: 'Your name', enterName: 'Enter your name...',
+                textName: 'Text name', enterTextName: 'Enter text name...',
+                nothingToPublish: 'Nothing to publish.', select2words: 'Select at least 2 words',
+                published: 'Published: ', saved: 'Saved: ',
+                ru: 'RU',
+                rule1: '<strong>Alphabet:</strong> 7 notes — <em>Do, Re, Mi, Fa, Sol, La, Si</em>',
+                rule2: '<strong>Words = intervals</strong> between notes.',
+                rule3: '<strong>Direction:</strong> Up = light/active, Down = dark/passive.',
+                rule4: '<strong>135+ primitives</strong> in 12 fixed categories.',
+                rule5: '<strong>Order:</strong> Existence → Size → Physics → Material → Shape → Color → Action → Relation → Value → Quantity → Space → Time',
+                rule6: '<strong>Flexible:</strong> 2–12 primitives per word.',
+                rule7: '<strong>Community:</strong> <a href="https://github.com/tihon0392-boop/solres_language/discussions" target="_blank" style="color:var(--accent);">GitHub Discussions</a>',
+                
+            }
+        };
+        let currentLang = 'en';
+        function t(key) { return (LANG[currentLang] && LANG[currentLang][key]) || key; }
+        function changeLanguage() {
+            currentLang = document.getElementById('langSelect').value;
+            applyLanguage();
+        }
+        function applyLanguage() {
+            // Вкладки и кнопки
+            document.querySelectorAll('[data-lang]').forEach(el => {
+                const value = t(el.dataset.lang);
+                if (value && value.includes('<')) {
+                    el.innerHTML = value;
+                } else if (value) {
+                    el.textContent = value;
+                }
+            });
+            // Placeholder-ы
+            document.getElementById('wordInput').placeholder = t('typeWord');
+            document.getElementById('sentenceName').placeholder = t('sentenceName');
+            document.getElementById('composeWordName').placeholder = t('wordName');
+            document.getElementById('dictSearch').placeholder = t('search');
+            // Кнопка темы
+            document.getElementById('themeBtn').textContent = theme === 'dark' ? t('light') : t('dark');
+            // Туториал
+            const tut = document.getElementById('tutorialOverlay');
+            if (tut) {
+                tut.querySelector('h2').textContent = t('welcome');
+                for (let i = 1; i <= 9; i++) tut.querySelectorAll('p')[i-1].innerHTML = t('tutorial' + i);
+                tut.querySelector('button').textContent = t('getStarted');
+            }
+            // Placeholder пианино
+            const seq = document.getElementById('pianoSequence');
+            if (seq && seq.style.color === 'var(--muted)') seq.textContent = t('recordMelody');
+            // Заглушки Translate
+            const result = document.getElementById('result');
+            if (result && result.querySelector('div[style]')) {
+                result.querySelector('div').textContent = t('typeWord');
+            }
+        }
 
         // === STARFIELD ===
         const canvas = document.getElementById('starfield'), ctx = canvas.getContext('2d'); let bodies = [];
@@ -420,32 +618,90 @@ HTML = r"""
         function drawBodies() { ctx.clearRect(0, 0, canvas.width, canvas.height); const isLight = theme === 'light', now = Date.now(); bodies.forEach(b => { if (!b.alive) { if (now > b.respawnTime) { b.alive = true; b.baseOpacity = random(0.15, 1.0); b.r = random(0.8, 4.5); } return; } const twinkle = Math.sin(now / 1000 * (2 * Math.PI) / (b.period / 1000) + b.phase) * 0.3 + 0.7, alpha = b.baseOpacity * twinkle; if (isLight) { ctx.fillStyle = `rgba(${Math.floor(alpha*30)},${Math.floor(alpha*30)},${Math.floor(alpha*30)},${alpha})`; ctx.shadowColor = `rgba(0,0,0,${alpha*0.95})`; } else { const br = Math.floor(180 + alpha*75); ctx.fillStyle = `rgba(${br},${br},${Math.floor(br*0.85)},${alpha})`; ctx.shadowColor = `rgba(255,240,220,${alpha*0.7})`; } ctx.shadowBlur = b.r*3; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fill(); }); ctx.shadowBlur = 0; requestAnimationFrame(drawBodies); }
         canvas.addEventListener('click', (e) => { const rect = canvas.getBoundingClientRect(), mx = e.clientX - rect.left, my = e.clientY - rect.top; for (let b of bodies) { if (!b.alive) continue; if (Math.sqrt((b.x-mx)**2 + (b.y-my)**2) < b.r + 10) { b.alive = false; b.respawnTime = Date.now() + 10000; break; } } });
         resizeCanvas(); createBodies(); drawBodies();
-        function toggleTheme() { const btn = document.getElementById('themeBtn'); if (theme === 'dark') { theme = 'light'; document.body.classList.add('light-theme'); btn.textContent = '🌙 Dark'; } else { theme = 'dark'; document.body.classList.remove('light-theme'); btn.textContent = '☀️ Light'; } }
+        function toggleTheme() { 
+            const btn = document.getElementById('themeBtn'); 
+            if (theme === 'dark') { 
+                theme = 'light'; 
+                document.body.classList.add('light-theme'); 
+            } else { 
+                theme = 'dark'; 
+                document.body.classList.remove('light-theme'); 
+            } 
+            btn.textContent = t(theme === 'dark' ? 'light' : 'dark'); 
+        }
 
         // === TABS ===
-        function switchTab(tab) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); document.querySelectorAll('.card').forEach(c => c.style.display = 'none'); document.getElementById('tab-' + tab).style.display = 'block'; event.target.classList.add('active'); if (tab === 'mywords') loadMyWords(); if (tab === 'community') loadCommunityWords(); if (tab === 'sentences') loadSentenceRows(); if (tab === 'text') loadText(); if (tab === 'instruments') buildPiano(); }
+        function switchTab(tab) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); document.querySelectorAll('.card').forEach(c => c.style.display = 'none'); document.getElementById('tab-' + tab).style.display = 'block'; event.target.classList.add('active'); if (tab === 'mywords') loadMyWords(); if (tab === 'community') loadCommunityWords(); if (tab === 'sentences') { loadSentenceRows(); document.getElementById('sentenceEmpty').style.display = 'none'; } if (tab === 'text') loadText(); if (tab === 'instruments') buildPiano(); }
 
         // === STORAGE ===
         function getMyWords() { try { return JSON.parse(localStorage.getItem('solres_mywords') || '[]'); } catch(e) { return []; } }
         function saveMyWords(w) { localStorage.setItem('solres_mywords', JSON.stringify(w)); }
         function getSentences() { try { return JSON.parse(localStorage.getItem('solres_sentences') || '[]'); } catch(e) { return []; } }
-        function saveSentence() { 
-            const name = document.getElementById('sentenceName').value.trim() || 'sentence_' + Date.now(); 
-            const wordNames = []; 
-            document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => { 
-                if (inp.value) wordNames.push(inp.value); 
-            }); 
-            if (wordNames.length < 2) return; 
-            const sentences = getSentences(); 
-            sentences.push({name, words: wordNames, created: new Date().toISOString()}); 
-            saveSentences(sentences); 
-            document.getElementById('sentenceName').value = ''; 
-            alert('Saved: ' + name); 
-        }
+        function saveSentences(s) { localStorage.setItem('solres_sentences', JSON.stringify(s)); }
 
         // === SPEED ===
         function updateSpeedLabel(sliderId, labelId) { const val = parseFloat(document.getElementById(sliderId).value).toFixed(1); document.getElementById(labelId).textContent = val + 'x'; }
         function getSpeed(id) { return parseFloat(document.getElementById(id).value) || 1.0; }
+        function showToast(msg) {
+            let toast = document.getElementById('toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'toast';
+                toast.className = 'toast';
+                document.body.appendChild(toast);
+            }
+            toast.textContent = msg;
+            toast.classList.add('show');
+            clearTimeout(toast._timeout);
+            toast._timeout = setTimeout(() => toast.classList.remove('show'), 2000);
+        }
+        function showPrompt(title, placeholder, callback) {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            overlay.innerHTML = `
+                <div class="modal-box">
+                    <h3 style="color:var(--accent);margin-bottom:8px;">${title}</h3>
+                    <input type="text" id="modalInput" placeholder="${placeholder}" autofocus>
+                    <div style="display:flex;gap:8px;justify-content:center;">
+                        <button class="btn btn-primary" data-lang="ok" id="modalOk">OK</button>
+                        <button class="btn btn-sm" data-lang="cancel" id="modalCancel">Cancel</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            
+            const input = overlay.querySelector('#modalInput');
+            overlay.querySelector('#modalOk').onclick = () => {
+                const val = input.value.trim();
+                document.body.removeChild(overlay);
+                callback(val);
+            };
+            overlay.querySelector('#modalCancel').onclick = () => {
+                document.body.removeChild(overlay);
+                callback(null);
+            };
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const val = input.value.trim();
+                    document.body.removeChild(overlay);
+                    callback(val);
+                }
+                if (e.key === 'Escape') {
+                    document.body.removeChild(overlay);
+                    callback(null);
+                }
+            });
+            input.focus();
+        }
+        function showPatternInfo(pattern) {
+            const parts = pattern.split(',');
+            let info = parts.map(p => {
+                if (p.endsWith('_UP')) return p.replace('_UP', '') + ' ↑';
+                if (p.endsWith('_DOWN')) return p.replace('_DOWN', '') + ' ↓';
+                if (p.endsWith('_STATIC')) return p.replace('_STATIC', '') + ' →';
+                return p;
+            }).join(' + ');
+            showToast(pattern + ' = ' + info);
+        }
 
         // === TRANSLATE ===
         async function translateWord() { const word = document.getElementById('wordInput').value.trim(); if (!word) return; currentWord = word; const res = await fetch('/translate?word=' + encodeURIComponent(word)); const data = await res.json(); let html = ''; if (data.error) { html = '<div class="error-msg">' + data.error + '</div>'; } else { if (data.description) { html += '<div class="desc-row">'; data.description.forEach(d => { html += '<span>' + d + '</span> '; }); html += '</div>'; } html += '<div class="notes-display">' + data.notes + '</div>'; if (data.meaning && data.meaning !== 'not found') { html += '<div class="meaning">' + data.meaning + '</div>'; } } document.getElementById('result').innerHTML = html; if (!data.error) playAudio(); }
@@ -462,7 +718,7 @@ HTML = r"""
         function selectDropdown(div, word) { const input = div.parentElement.parentElement.querySelector('input'); input.value = word; div.parentElement.style.display = 'none'; if (typeof validateCompose === 'function') validateCompose(); }
 
         // === COMPOSE ===
-        function buildComposeGrid() { const g = document.getElementById('composeGrid'); g.innerHTML = ''; CATEGORY_ORDER.forEach((cat, i) => { const words = CATEGORIES[cat] || []; const row = document.createElement('div'); row.className = 'compose-row'; row.id = 'compose-row-' + i; row.innerHTML = `<span class="cat-label">${cat.split(':').pop()}</span><div class="dropdown-search"><input type="text" placeholder="—" onfocus="toggleDropdown(this,true)" oninput="filterDropdown(this)" onblur="setTimeout(()=>toggleDropdown(this,false),200)"><div class="dropdown-list"></div></div><button class="btn-xs" onclick="showIntervalInfo('${cat}', event)">ℹ️</button>`; g.appendChild(row); buildDropdown(row.querySelector('.dropdown-list'), words, row.querySelector('input')); }); }
+        function buildComposeGrid() { const g = document.getElementById('composeGrid'); g.innerHTML = ''; CATEGORY_ORDER.forEach((cat, i) => { const words = CATEGORIES[cat] || []; const row = document.createElement('div'); row.className = 'compose-row'; row.id = 'compose-row-' + i; row.innerHTML = `<span class="cat-label">${cat.split(':').pop()}</span><div class="dropdown-search"><input type="text" placeholder="—" onfocus="toggleDropdown(this,true)" oninput="filterDropdown(this)" onblur="setTimeout(()=>toggleDropdown(this,false),200)"><div class="dropdown-list"></div></div><button class="btn-xs" data-lang="info" onclick="showIntervalInfo('${cat}', event)">ℹ️</button>`; g.appendChild(row); buildDropdown(row.querySelector('.dropdown-list'), words, row.querySelector('input')); }); }
         function showIntervalInfo(cat, e) { const sample = CATEGORIES[cat]?.[0]; if (sample && PRIMITIVE_INFO[sample]) { const t = document.createElement('div'); t.style.cssText = 'position:absolute;background:var(--surface2);color:var(--text);padding:8px 12px;border-radius:8px;font-size:0.8em;z-index:10;border:1px solid var(--accent);'; t.textContent = 'Interval: ' + PRIMITIVE_INFO[sample].pattern; document.body.appendChild(t); t.style.left = e.clientX + 'px'; t.style.top = (e.clientY - 40) + 'px'; setTimeout(() => t.remove(), 2000); } }
         function getSelectedPrimitives() { const s = []; CATEGORY_ORDER.forEach((cat, i) => { const inp = document.querySelector(`#compose-row-${i} input`); if (inp && inp.value && CATEGORIES[cat]?.includes(inp.value)) s.push({word: inp.value, category: cat, index: i}); }); return s; }
         function validateCompose() { const selected = getSelectedPrimitives(); let lastIdx = -1, valid = true; CATEGORY_ORDER.forEach((_, i) => { const row = document.getElementById('compose-row-' + i); if (row) row.classList.remove('invalid'); }); for (const s of selected) { const catIdx = CATEGORY_ORDER.indexOf(s.category); if (catIdx < lastIdx) { valid = false; document.getElementById('compose-row-' + s.index).classList.add('invalid'); } lastIdx = catIdx; } document.getElementById('composeError').innerHTML = ''; return {valid, selected}; }
@@ -473,7 +729,53 @@ HTML = r"""
         buildComposeGrid();
 
         // === PIANO === 
-        function buildPiano() { const piano = document.getElementById('piano'); piano.innerHTML = ''; const startMidi = (pianoOctave + 1) * 12; const WHITE_W = 36, BLACK_W = 20; const whiteSemitones = [0,2,4,5,7,9,11]; for (let oct = 0; oct < 2; oct++) { for (let w = 0; w < 7; w++) { const midi = startMidi + oct*12 + whiteSemitones[w]; const noteIdx = midi % 12, octave = Math.floor(midi/12)-1; const key = document.createElement('div'); key.className = 'white-key'; key.style.left = (oct*7 + w)*WHITE_W + 'px'; key.textContent = NOTE_NAMES[noteIdx].split('/')[0] + octave; key.dataset.midi = midi; key.onclick = () => pianoKeyClick(midi, NOTE_NAMES[noteIdx].split('/')[0] + octave); piano.appendChild(key); } } const blackPositions = [{wi:0, mo:1},{wi:1, mo:3},{wi:3, mo:6},{wi:4, mo:8},{wi:5, mo:10}]; for (let oct = 0; oct < 2; oct++) { for (let bp of blackPositions) { const midi = startMidi + oct*12 + bp.mo; const noteIdx = midi % 12, octave = Math.floor(midi/12)-1; const key = document.createElement('div'); key.className = 'black-key'; key.style.left = ((oct*7 + bp.wi)*WHITE_W + WHITE_W - BLACK_W/2) + 'px'; key.textContent = NOTE_NAMES[noteIdx]; key.dataset.midi = midi; key.onclick = (e) => { e.stopPropagation(); pianoKeyClick(midi, NOTE_NAMES[noteIdx].split('/')[0] + octave); }; piano.appendChild(key); } } updatePianoRangeLabel(); }
+        function buildPiano() { 
+            const mobile = window.innerWidth <= 600;
+            const WHITE_W = mobile ? 20 : 36;
+            const BLACK_W = mobile ? 13 : 20;
+            const WHITE_H = mobile ? 70 : 130;
+            const BLACK_H = mobile ? 44 : 82;
+            const piano = document.getElementById('piano'); 
+            piano.innerHTML = ''; 
+            piano.style.width = (14 * WHITE_W) + 'px';
+            piano.style.height = WHITE_H + 'px';
+            const startMidi = (pianoOctave + 1) * 12;
+            const whiteSemitones = [0,2,4,5,7,9,11]; 
+            for (let oct = 0; oct < 2; oct++) { 
+                for (let w = 0; w < 7; w++) { 
+                    const midi = startMidi + oct*12 + whiteSemitones[w]; 
+                    const noteIdx = midi % 12, octave = Math.floor(midi/12)-1; 
+                    const key = document.createElement('div'); 
+                    key.className = 'white-key'; 
+                    key.style.left = (oct*7 + w)*WHITE_W + 'px'; 
+                    key.style.width = WHITE_W + 'px'; 
+                    key.style.height = WHITE_H + 'px'; 
+                    key.style.fontSize = (mobile ? '0.25em' : '0.5em');
+                    key.textContent = NOTE_NAMES[noteIdx].split('/')[0] + octave; 
+                    key.dataset.midi = midi; 
+                    key.onclick = () => pianoKeyClick(midi, NOTE_NAMES[noteIdx].split('/')[0] + octave); 
+                    piano.appendChild(key); 
+                } 
+            } 
+            const blackPositions = [{wi:0, mo:1},{wi:1, mo:3},{wi:3, mo:6},{wi:4, mo:8},{wi:5, mo:10}]; 
+            for (let oct = 0; oct < 2; oct++) { 
+                for (let bp of blackPositions) { 
+                    const midi = startMidi + oct*12 + bp.mo; 
+                    const noteIdx = midi % 12, octave = Math.floor(midi/12)-1; 
+                    const key = document.createElement('div'); 
+                    key.className = 'black-key'; 
+                    key.style.left = ((oct*7 + bp.wi)*WHITE_W + WHITE_W - BLACK_W/2) + 'px'; 
+                    key.style.width = BLACK_W + 'px'; 
+                    key.style.height = BLACK_H + 'px'; 
+                    key.style.fontSize = (mobile ? '0.2em' : '0.35em');
+                    key.textContent = NOTE_NAMES[noteIdx]; 
+                    key.dataset.midi = midi; 
+                    key.onclick = (e) => { e.stopPropagation(); pianoKeyClick(midi, NOTE_NAMES[noteIdx].split('/')[0] + octave); }; 
+                    piano.appendChild(key); 
+                } 
+            } 
+            updatePianoRangeLabel(); 
+        }
         function updatePianoRangeLabel() { const startMidi = (pianoOctave + 1) * 12; const s = NOTE_NAMES[startMidi%12].split('/')[0] + (Math.floor(startMidi/12)-1); const e = NOTE_NAMES[(startMidi+23)%12].split('/')[0] + (Math.floor((startMidi+23)/12)-1); document.getElementById('pianoRangeLabel').textContent = s + ' – ' + e; }
         function pianoShiftOctave(dir) { pianoOctave += dir; if (pianoOctave < 0) pianoOctave = 0; if (pianoOctave > 5) pianoOctave = 5; buildPiano(); }
         async function pianoKeyClick(midi, noteName) { pianoSequence.push({midi, noteName}); updatePianoSequenceDisplay(); const keys = document.querySelectorAll('#piano div[data-midi="' + midi + '"]'); keys.forEach(k => k.classList.add('active')); setTimeout(() => keys.forEach(k => k.classList.remove('active')), 300); const r = await fetch('/piano_note?midi=' + midi + '&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await r.blob())).play(); }
@@ -481,202 +783,214 @@ HTML = r"""
         function pianoUndoLastNote() { pianoSequence.pop(); updatePianoSequenceDisplay(); }
         function pianoRemoveNote(idx) { pianoSequence.splice(idx, 1); updatePianoSequenceDisplay(); }
         async function pianoPlaySequence() { if (pianoSequence.length === 0) return; const midis = pianoSequence.map(s => s.midi); for (let i = 0; i < midis.length; i++) { setTimeout(() => { const keys = document.querySelectorAll('#piano div[data-midi="' + midis[i] + '"]'); keys.forEach(k => k.classList.add('active')); setTimeout(() => keys.forEach(k => k.classList.remove('active')), 350); }, i * 400 / getSpeed('pianoSpeed')); } const r = await fetch('/piano_play?notes=' + encodeURIComponent(midis.join(',')) + '&speed=' + getSpeed('pianoSpeed') + '&instrument=' + currentInstrument); const p = document.getElementById('pianoAudio'); p.style.display = 'block'; p.src = URL.createObjectURL(await r.blob()); p.play(); analyzeIntervals(midis); }
-        async function analyzeIntervals(midis) { if (midis.length < 2) return; const intervals = []; for (let i = 1; i < midis.length; i++) intervals.push(midis[i] - midis[i-1]); const r = await fetch('/analyze?intervals=' + encodeURIComponent(intervals.join(','))); const data = await r.json(); lastAnalysis = data; let html = '<table class="analysis-table"><thead><tr><th>Note</th><th>Interval</th><th>Primitive</th></tr></thead><tbody>'; for (let i = 0; i < intervals.length; i++) { const diff = intervals[i], a = data.results[i], found = a && a.found; html += `<tr><td>${pianoSequence[i+1].noteName}</td><td class="${found?'found':'not-found'}">${diff>0?'+':''}${diff}</td><td class="${found?'found':'not-found'}">${found ? a.ru + ' (' + a.en + ')' : '—'}</td></tr>`; } html += '</tbody></table>'; if (data.word_found) html += `<div class="meaning" style="margin-top:8px;">✅ Word: <strong>${data.word_found}</strong></div>`; else if (data.all_found) html += `<div class="desc-row" style="margin-top:8px;">Primitives: ${data.primitives_ru.join(' + ')}</div>`; else html += `<div class="error-msg" style="margin-top:8px;">Some intervals not found.</div>`; html += `<div style="text-align:center;margin-top:8px;"><button class="btn btn-sm" onclick="savePianoAsWord()">💾 Save as My Word</button></div>`; document.getElementById('pianoAnalysis').innerHTML = html; }
-        function savePianoAsWord() { if (!lastAnalysis || !lastAnalysis.primitives_ru || lastAnalysis.primitives_ru.length < 2) return; const name = prompt('Word name:', 'piano_' + Date.now()); if (!name) return; const myWords = getMyWords(); myWords.push({name, primitives: lastAnalysis.primitives_ru, source: '🎹 Instruments', created: new Date().toISOString()}); saveMyWords(myWords); document.getElementById('pianoSaveArea').innerHTML = '<div class="success-msg">Saved: ' + name + '</div>'; }
+        async function analyzeIntervals(midis) { 
+            if (midis.length < 2) return; 
+            const intervals = []; 
+            for (let i = 1; i < midis.length; i++) intervals.push(midis[i] - midis[i-1]); 
+            const r = await fetch('/analyze?intervals=' + encodeURIComponent(intervals.join(','))); 
+            const data = await r.json(); 
+            lastAnalysis = data; 
+            let html = '<table class="analysis-table"><thead><tr><th>Note</th><th>Interval</th><th>Primitive</th></tr></thead><tbody>'; 
+            for (let i = 0; i < intervals.length; i++) { 
+                const diff = intervals[i], a = data.results[i]; 
+                let found = false;
+                let text = '—';
+                if (a && a.options) {
+                    found = true;
+                    text = a.options.map(o => o.ru).join(' | ');
+                } else if (a && a.found) {
+                    found = true;
+                    text = a.ru + ' (' + a.en + ')';
+                }
+                html += `<tr><td>${pianoSequence[i+1].noteName}</td><td class="${found?'found':'not-found'}">${diff>0?'+':''}${diff}</td><td class="${found?'found':'not-found'}">${text}</td></tr>`; 
+            } 
+            html += '</tbody></table>'; 
+            if (data.word_found) html += `<div class="meaning" style="margin-top:8px;">✅ Word: <strong>${data.word_found}</strong></div>`; 
+            else if (data.all_found) html += `<div class="desc-row" style="margin-top:8px;">Primitives: ${data.primitives_ru.join(' + ')}</div>`; 
+            else html += `<div class="error-msg" style="margin-top:8px;">Some intervals not found.</div>`; 
+            html += `<div style="text-align:center;margin-top:8px;"><button class="btn btn-sm" data-lang="saveAsWord" onclick="savePianoAsWord()">💾 Save as My Word</button></div>`; 
+            document.getElementById('pianoAnalysis').innerHTML = html; 
+        }
+        function savePianoAsWord() {
+            if (!lastAnalysis || !lastAnalysis.primitives_ru || lastAnalysis.primitives_ru.length < 2) return;
+            showPrompt('Word name', 'Enter word name...', function(name) {
+                if (!name) return;
+                const myWords = getMyWords();
+                myWords.push({name, primitives: lastAnalysis.primitives_ru, source: '🎹 Instruments', created: new Date().toISOString()});
+                saveMyWords(myWords);
+                document.getElementById('pianoSaveArea').innerHTML = '<div class="success-msg">Saved: ' + name + '</div>';
+                showToast('Saved: ' + name);
+            });
+        }
         function pianoClearSequence() { pianoSequence = []; updatePianoSequenceDisplay(); document.getElementById('pianoAudio').style.display = 'none'; document.getElementById('pianoAnalysis').innerHTML = ''; document.getElementById('pianoSaveArea').innerHTML = ''; lastAnalysis = null; }
         function pianoToCompose() { if (pianoSequence.length < 2) return; const intervals = []; for (let i = 1; i < pianoSequence.length; i++) intervals.push(pianoSequence[i].midi - pianoSequence[i-1].midi); switchTab('compose'); document.getElementById('composeError').innerHTML = `<div style="color:var(--accent);text-align:center;margin-top:10px;">Intervals from Piano: ${intervals.map(i=>(i>0?'+':'')+i).join(', ')}</div>`; }
-        function instrumentChanged() {
-            currentInstrument = document.getElementById('instrumentSelect').value;
-        }
+        function instrumentChanged() { currentInstrument = document.getElementById('instrumentSelect').value; }
+                // === KEYBOARD BINDINGS ===
+        const KEY_MAP = {
+            'KeyA': 0, 'KeyW': 1, 'KeyS': 2, 'KeyE': 3, 'KeyD': 4,
+            'KeyF': 5, 'KeyT': 6, 'KeyG': 7, 'KeyY': 8, 'KeyH': 9,
+            'KeyU': 10, 'KeyJ': 11, 'KeyK': 12
+        };
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.repeat) return;
+            if (e.code === 'ArrowLeft') { pianoShiftOctave(-1); return; }
+            if (e.code === 'ArrowRight') { pianoShiftOctave(1); return; }
+            
+            const semitoneOffset = KEY_MAP[e.code];
+            if (semitoneOffset !== undefined) {
+                const startMidi = (pianoOctave + 1) * 12;
+                const midi = startMidi + semitoneOffset;
+                const noteIdx = midi % 12;
+                const noteName = NOTE_NAMES[noteIdx].split('/')[0];
+                const octave = Math.floor(midi / 12) - 1;
+                pianoKeyClick(midi, noteName + octave);
+            }
+        });
         buildPiano();
 
         // === MY WORDS ===
         function loadMyWords() { const words = getMyWords(); let html = ''; words.forEach((w, i) => { html += `<tr><td>${w.name}</td><td>${(w.primitives||[]).join(', ')}</td><td><span class="badge ${w.source==='📖 System'?'badge-system':'badge-user'}">${w.source||'?'}</span></td><td><button class="btn-sm" onclick="playMyWord(${i})">▶</button></td><td><button class="btn-sm" onclick="publishMyWord(${i})" title="Publish">🌐</button></td><td><button class="btn-sm btn-danger" onclick="deleteMyWord(${i})">✕</button></td></tr>`; }); document.querySelector('#myWordsTable tbody').innerHTML = html || '<tr><td colspan="6" style="text-align:center;color:var(--muted);">No saved words yet.</td></tr>'; }
         async function playMyWord(idx) { const words = getMyWords(); if (!words[idx]) return; const ar = await fetch('/compose_play?words=' + encodeURIComponent((words[idx].primitives||[]).join(',')) + '&speed=' + getSpeed('mywordsSpeed') + '&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
         async function publishMyWord(idx) {
-            const words = getMyWords();
-            if (!words[idx]) return;
-            const w = words[idx];
-            const author = prompt('Your name (or leave empty for anonymous):', '') || 'Anonymous';
-            await fetch('/shared/words/add', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-SolRes-Key': SECRET_KEY
-                },
-                body: JSON.stringify({name: w.name, primitives: w.primitives, source: w.source, created: w.created, author: author})
+            const words = getMyWords(); if (!words[idx]) return; const w = words[idx];
+            showPrompt('Your name', 'Enter your name...', async function(author) {
+                author = author || 'Anonymous';
+                await fetch('/shared/words/add', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json', 'X-SolRes-Key': SECRET_KEY}, 
+                    body: JSON.stringify({name: w.name, primitives: w.primitives, source: w.source, created: w.created, author}) 
+                });
+                showToast('Published: ' + w.name);
             });
-            alert('Published: ' + w.name);
         }
         function deleteMyWord(idx) { const words = getMyWords(); words.splice(idx, 1); saveMyWords(words); loadMyWords(); }
         function clearMyWords() { if (confirm('Delete all?')) { saveMyWords([]); loadMyWords(); } }
 
         // === COMMUNITY ===
         async function loadCommunityWords() {
-            const r = await fetch('/shared/words');
-            const words = await r.json();
-            let html = '';
-            words.forEach(w => {
-                const score = (w.likes || 0) - (w.dislikes || 0);
-                html += `<tr>
-                    <td>${w.name}</td>
-                    <td>${(w.primitives||[]).join(', ')}</td>
-                    <td><span class="badge badge-community">${w.author||'Anonymous'}</span></td>
-                    <td style="white-space:nowrap;">
-                        <button class="btn-xs" onclick="voteWord(${w.id},'like')">👍 ${w.likes||0}</button>
-                        <span style="margin:0 4px;color:${score>=0?'var(--green)':'var(--red)'};">${score}</span>
-                        <button class="btn-xs" onclick="voteWord(${w.id},'dislike')">👎 ${w.dislikes||0}</button>
-                    </td>
-                    <td><button class="btn-sm" onclick="playCommunityWord('${(w.primitives||[]).join(',')}')">▶</button></td>
-                </tr>`;
-            });
+            const r = await fetch('/shared/words'); const words = await r.json(); let html = '';
+            words.forEach(w => { const score = (w.likes||0)-(w.dislikes||0);
+                html += `<tr><td>${w.name}</td><td>${(w.primitives||[]).join(', ')}</td><td><span class="badge badge-community">${w.author||'Anonymous'}</span></td><td style="white-space:nowrap;"><button class="btn-xs" onclick="voteWord(${w.id},'like')">👍 ${w.likes||0}</button><span style="margin:0 4px;color:${score>=0?'var(--green)':'var(--red)'};">${score}</span><button class="btn-xs" onclick="voteWord(${w.id},'dislike')">👎 ${w.dislikes||0}</button></td><td><button class="btn-sm" onclick="playCommunityWord('${(w.primitives||[]).join(',')}')">▶</button></td></tr>`; });
             document.querySelector('#communityTable tbody').innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">No community words yet.</td></tr>';
         }
-        
-                let communityTab = 'words';
-        
-        function switchCommunityTab(tab) {
-            communityTab = tab;
-            document.querySelectorAll('#tab-community .tab').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
-            document.getElementById('community-words').style.display = tab === 'words' ? 'block' : 'none';
-            document.getElementById('community-sentences').style.display = tab === 'sentences' ? 'block' : 'none';
-            document.getElementById('community-text').style.display = tab === 'text' ? 'block' : 'none';
-            if (tab === 'words') loadCommunityWords();
-            if (tab === 'sentences') loadCommunitySentences();
-            if (tab === 'text') loadCommunityText();
-        }
-        
+        let communityTab = 'words';
+        function switchCommunityTab(tab) { communityTab = tab; document.querySelectorAll('#tab-community .tab').forEach(t => t.classList.remove('active')); event.target.classList.add('active'); document.getElementById('community-words').style.display = tab==='words'?'block':'none'; document.getElementById('community-sentences').style.display = tab==='sentences'?'block':'none'; document.getElementById('community-text').style.display = tab==='text'?'block':'none'; if (tab==='words') loadCommunityWords(); if (tab==='sentences') loadCommunitySentences(); if (tab==='text') loadCommunityText(); }
         async function loadCommunitySentences() {
-            const r = await fetch('/shared/sentences');
-            const sentences = await r.json();
-            let html = '';
-            sentences.forEach(s => {
-                const score = (s.likes || 0) - (s.dislikes || 0);
-                html += `<tr>
-                    <td>${s.name}</td>
-                    <td>${(s.words||[]).join(', ')}</td>
-                    <td><span class="badge badge-community">${s.author||'Anonymous'}</span></td>
-                    <td style="white-space:nowrap;">
-                        <button class="btn-xs" onclick="voteSentence(${s.id},'like')">👍 ${s.likes||0}</button>
-                        <span style="margin:0 4px;color:${score>=0?'var(--green)':'var(--red)'};">${score}</span>
-                        <button class="btn-xs" onclick="voteSentence(${s.id},'dislike')">👎 ${s.dislikes||0}</button>
-                    </td>
-                    <td><button class="btn-sm" onclick="playCommunitySentence('${(s.words||[]).join(',')}')">▶</button></td>
-                </tr>`;
-            });
+            const r = await fetch('/shared/sentences'); const sentences = await r.json(); let html = '';
+            sentences.forEach(s => { const score = (s.likes||0)-(s.dislikes||0);
+                html += `<tr><td>${s.name}</td><td>${(s.words||[]).join(', ')}</td><td><span class="badge badge-community">${s.author||'Anonymous'}</span></td><td style="white-space:nowrap;"><button class="btn-xs" onclick="voteSentence(${s.id},'like')">👍 ${s.likes||0}</button><span style="margin:0 4px;color:${score>=0?'var(--green)':'var(--red)'};">${score}</span><button class="btn-xs" onclick="voteSentence(${s.id},'dislike')">👎 ${s.dislikes||0}</button></td><td><button class="btn-sm" onclick="playCommunitySentence('${(s.words||[]).join(',')}')">▶</button></td></tr>`; });
             document.querySelector('#communitySentencesTable tbody').innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No published sentences yet.</td></tr>';
         }
-        
-        async function voteSentence(id, type) {
-            await fetch('/shared/sentences/' + id + '/' + type, { method: 'POST' });
-            loadCommunitySentences();
-        }
-        
-        async function publishSentence() {
-            const name = document.getElementById('sentenceName').value.trim() || 'sentence_' + Date.now();
-            const wordNames = [];
-            document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => {
-                if (inp.value) wordNames.push(inp.value);
-            });
-            if (wordNames.length < 2) return;
-            const author = prompt('Your name (or leave empty for anonymous):', '') || 'Anonymous';
-            await fetch('/shared/sentences/add', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-SolRes-Key': SECRET_KEY
-                },
-                body: JSON.stringify({name, words: wordNames, author, created: new Date().toISOString()})
-            });
-            alert('Published: ' + name);
-        }
-        
         async function loadCommunityText() {
-            const r = await fetch('/shared/sentences'); // Пока тот же эндпоинт
+            const r = await fetch('/shared/text');
             const texts = await r.json();
             let html = '';
             texts.forEach(t => {
-                html += `<tr>
-                    <td>${t.name}</td>
-                    <td>${(t.words||[]).join(' | ')}</td>
-                    <td><span class="badge badge-community">${t.author||'Anonymous'}</span></td>
-                    <td>—</td>
-                    <td><button class="btn-sm" onclick="playCommunitySentence('${(t.words||[]).join(',')}')">▶</button></td>
-                </tr>`;
+                const score = (t.likes||0)-(t.dislikes||0);
+                html += `<tr><td>${t.name}</td><td>${(t.sentences||[]).join(' | ')}</td><td><span class="badge badge-community">${t.author||'Anonymous'}</span></td><td style="white-space:nowrap;"><button class="btn-xs" onclick="voteText(${t.id},'like')">👍 ${t.likes||0}</button><span style="margin:0 4px;color:${score>=0?'var(--green)':'var(--red)'};">${score}</span><button class="btn-xs" onclick="voteText(${t.id},'dislike')">👎 ${t.dislikes||0}</button></td><td><button class="btn-sm" onclick='playCommunityText(${JSON.stringify(t.sentences)})'>▶</button></td></tr>`;
             });
             document.querySelector('#communityTextTable tbody').innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No published texts yet.</td></tr>';
         }
-        
-        async function playCommunitySentence(wordsStr) {
-            const ar = await fetch('/compose_play?words=' + encodeURIComponent(wordsStr) + '&speed=1.0');
-            new Audio(URL.createObjectURL(await ar.blob())).play();
+        async function voteText(id, type) { await fetch('/shared/text/'+id+'/'+type, {method:'POST'}); loadCommunityText(); }
+        async function playCommunityText(sentences) {
+            const allWords = getAllWordsForSelect();
+            for (const sentName of sentences) {
+                const sent = getSentences().find(s => s.name === sentName);
+                if (!sent) continue;
+                let allPrims = [];
+                sent.words.forEach(wordName => {
+                    const w = allWords.find(aw => aw.name === wordName);
+                    if (w) allPrims = allPrims.concat(w.primitives || []);
+                });
+                if (allPrims.length === 0) continue;
+                    const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('communitySpeed') + '&instrument=' + currentInstrument);
+                const a = new Audio(URL.createObjectURL(await ar.blob()));
+                a.play();
+                await new Promise(r => { a.onended = r; });
+            }
         }
-
-        async function voteWord(id, type) {
-            await fetch('/shared/words/' + id + '/' + type, { method: 'POST' });
-            loadCommunityWords();
-        }
-        async function playCommunityWord(primitives) { const ar = await fetch('/compose_play?words=' + encodeURIComponent(primitives) + '&speed=1.0&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
+        async function voteWord(id, type) { await fetch('/shared/words/'+id+'/'+type, {method:'POST'}); loadCommunityWords(); }
+        async function voteSentence(id, type) { await fetch('/shared/sentences/'+id+'/'+type, {method:'POST'}); if (communityTab==='sentences') loadCommunitySentences(); else loadCommunityText(); }
+        async function playCommunityWord(primitives) { const ar = await fetch('/compose_play?words='+encodeURIComponent(primitives)+'&speed='+getSpeed('communitySpeed')+'&instrument='+currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
+        async function playCommunitySentence(wordsStr) { const ar = await fetch('/compose_play?words='+encodeURIComponent(wordsStr)+'&speed='+getSpeed('communitySpeed')+'&instrument='+currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
 
         // === SENTENCES ===
-        function getAllWordsForSelect() { const myWords = getMyWords(); const dictWords = Object.entries(DICTIONARY_WORDS).map(([name, data]) => ({name, primitives: data.ru, source: '📖 System'})); return [...dictWords, ...myWords]; }           
+        function getAllWordsForSelect() { const myWords = getMyWords(); const dictWords = Object.entries(DICTIONARY_WORDS).map(([name, data]) => ({name, primitives: data.ru, source: '📖 System'})); return [...dictWords, ...myWords]; }
         function loadSentenceRows() { document.getElementById('sentenceRows').innerHTML = ''; addSentenceRow(); }
         function addSentenceRow() { const allWords = getAllWordsForSelect(); const container = document.getElementById('sentenceRows'); const row = document.createElement('div'); row.className = 'sentence-row'; row.draggable = true; row.innerHTML = `<span class="drag-handle" draggable="true">⋮⋮</span><div class="dropdown-search"><input type="text" placeholder="🔍 Search word..." onfocus="toggleDropdown(this, true)" oninput="filterDropdown(this)" onblur="setTimeout(()=>toggleDropdown(this,false),200)"><div class="dropdown-list"></div></div><button class="btn-sm btn-danger" onclick="this.parentElement.remove()">✕</button>`; row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', Array.from(container.children).indexOf(row)); row.classList.add('dragging'); }); row.addEventListener('dragend', () => row.classList.remove('dragging')); row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag-over'); }); row.addEventListener('dragleave', () => row.classList.remove('drag-over')); row.addEventListener('drop', (e) => { e.preventDefault(); row.classList.remove('drag-over'); const from = parseInt(e.dataTransfer.getData('text/plain')); const to = Array.from(container.children).indexOf(row); if (from !== to && from >= 0 && to >= 0) { container.insertBefore(container.children[from], container.children[to + (from < to ? 1 : 0)]); } }); container.appendChild(row); buildDropdown(row.querySelector('.dropdown-list'), allWords.map(w => w.name), row.querySelector('input')); }
-        async function playSentence() { const allWords = getAllWordsForSelect(); const selected = []; document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => { if (inp.value) { const w = allWords.find(aw => aw.name === inp.value); if (w) selected.push(w); } }); if (selected.length === 0) return; const allPrims = selected.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('sentSpeed')); const p = document.getElementById('sentenceAudio'); p.style.display = 'block'; p.src = URL.createObjectURL(await ar.blob()); p.play(); }
-        function saveSentence() { const name = document.getElementById('sentenceName').value.trim() || 'sentence_' + Date.now(); const wordNames = []; document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => { if (inp.value) wordNames.push(inp.value); }); if (wordNames.length < 2) return; const sentences = getSentences(); sentences.push({name, words: wordNames, created: new Date().toISOString()}); saveSentences(sentences); document.getElementById('sentenceName').value = ''; alert('Saved: ' + name); }
+        async function playSentence() { const allWords = getAllWordsForSelect(); const selected = []; document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => { if (inp.value) { const w = allWords.find(aw => aw.name === inp.value); if (w) selected.push(w.primitives || []); } }); const allPrims = selected.flat(); if (allPrims.length === 0) return; const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('sentSpeed')); const p = document.getElementById('sentenceAudio'); p.style.display = 'block'; p.src = URL.createObjectURL(await ar.blob()); p.play(); }
+        function saveSentence() { const name = document.getElementById('sentenceName').value.trim() || 'sentence_' + Date.now(); const wordNames = []; document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => { if (inp.value) wordNames.push(inp.value); }); if (wordNames.length < 2) return; const sentences = getSentences(); sentences.push({name, words: wordNames, created: new Date().toISOString()}); saveSentences(sentences); document.getElementById('sentenceName').value = ''; showToast('Saved: ' + name); }
+        async function publishSentence() {
+            const name = document.getElementById('sentenceName').value.trim() || 'sentence_' + Date.now();
+            const allWords = getAllWordsForSelect();
+            const wordPrimitives = [];
+            document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => {
+                if (inp.value) {
+                    const w = allWords.find(aw => aw.name === inp.value);
+                    if (w) wordPrimitives.push(w.primitives.join(','));
+                }
+            });
+            if (wordPrimitives.length < 2) { showToast('Select at least 2 words'); return; }
+            showPrompt('Your name', 'Enter your name...', async function(author) {
+                author = author || 'Anonymous';
+                await fetch('/shared/sentences/add', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-SolRes-Key': SECRET_KEY},
+                    body: JSON.stringify({name, words: wordPrimitives, author, created: new Date().toISOString()})
+                });
+                showToast('Published: ' + name);
+            });
+        }
         function clearSentence() { document.getElementById('sentenceRows').innerHTML = ''; addSentenceRow(); document.getElementById('sentenceName').value = ''; }
 
         // === TEXT ===
         function loadText() { const sentences = getSentences(); const container = document.getElementById('textList'); if (sentences.length === 0) { container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;">No saved sentences yet.</div>'; return; } container.innerHTML = sentences.map((s, i) => `<div class="sentence-row" draggable="true" data-idx="${i}"><span class="drag-handle" draggable="true">⋮⋮</span><span style="flex:1;">${s.name}: ${(s.words||[]).join(', ')}</span><button class="btn-sm" onclick="playTextSentence(${i})">▶</button><button class="btn-sm btn-danger" onclick="deleteTextSentence(${i})">✕</button></div>`).join(''); container.querySelectorAll('.sentence-row').forEach(row => { row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', row.dataset.idx); row.classList.add('dragging'); }); row.addEventListener('dragend', () => row.classList.remove('dragging')); row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag-over'); }); row.addEventListener('dragleave', () => row.classList.remove('drag-over')); row.addEventListener('drop', (e) => { e.preventDefault(); row.classList.remove('drag-over'); const from = parseInt(e.dataTransfer.getData('text/plain')); const to = parseInt(row.dataset.idx); if (from !== to && !isNaN(from) && !isNaN(to)) { const s = getSentences(); const [moved] = s.splice(from, 1); s.splice(to, 0, moved); saveSentences(s); loadText(); } }); }); }
-        async function playText() { const sentences = getSentences(); if (sentences.length === 0) return; const allWords = getAllWordsForSelect(); for (const s of sentences) { const words = s.words.map(name => allWords.find(w => w.name === name)).filter(Boolean); if (words.length === 0) continue; const allPrims = words.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed') + '&instrument=' + currentInstrument); const a = new Audio(URL.createObjectURL(await ar.blob())); a.play(); await new Promise(r => { a.onended = r; setTimeout(r, 5000); }); } }
-        async function playTextSentence(idx) { const sentences = getSentences(); if (!sentences[idx]) return; const allWords = getAllWordsForSelect(); const words = sentences[idx].words.map(name => allWords.find(w => w.name === name)).filter(Boolean); if (words.length === 0) return; const allPrims = words.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed') + '&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
-        async function publishText() {
-            const sentences = getSentences();
-            if (sentences.length === 0) { alert('Nothing to publish.'); return; }
-            const author = prompt('Your name:', '') || 'Anonymous';
-            const name = prompt('Text name:', 'text_' + Date.now()) || 'text_' + Date.now();
-            const allWords = sentences.flatMap(s => s.words || []);
-            await fetch('/shared/sentences/add', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-SolRes-Key': SECRET_KEY
-                },
-                body: JSON.stringify({name, words: allWords, author, created: new Date().toISOString()})
-            });
-            alert('Published: ' + name);
+        async function playText() { 
+            const sentences = getSentences(); 
+            if (sentences.length === 0) return; 
+            const allWords = getAllWordsForSelect(); 
+            for (const s of sentences) { 
+                const words = s.words.map(name => allWords.find(w => w.name === name)).filter(Boolean); 
+                if (words.length === 0) continue; 
+                const allPrims = words.flatMap(w => w.primitives || []); 
+                const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed') + '&instrument=' + currentInstrument); 
+                const a = new Audio(URL.createObjectURL(await ar.blob())); 
+                a.play(); 
+                await new Promise(r => { a.onended = r; }); 
+            } 
         }
+        async function playTextSentence(idx) { const sentences = getSentences(); if (!sentences[idx]) return; const allWords = getAllWordsForSelect(); const words = sentences[idx].words.map(name => allWords.find(w => w.name === name)).filter(Boolean); if (words.length === 0) return; const allPrims = words.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed') + '&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
         function deleteTextSentence(idx) { const s = getSentences(); s.splice(idx, 1); saveSentences(s); loadText(); }
         function clearText() { if (confirm('Delete all?')) { saveSentences([]); loadText(); } }
-        
-        // === TUTORIAL ===
-        function showTutorial() {
-            const seen = localStorage.getItem('solres_tutorial_seen');
-            const overlay = document.getElementById('tutorialOverlay');
-            if (!seen && overlay) {
-                overlay.style.display = 'flex';
-            }
+        async function publishText() {
+            const sentences = getSentences();
+            if (sentences.length === 0) { showToast('Nothing to publish.'); return; }
+            showPrompt('Your name', 'Enter your name...', function(author) {
+                author = author || 'Anonymous';
+                showPrompt('Text name', 'Enter text name...', async function(name) {
+                    name = name || 'text_' + Date.now();
+                    const sentNames = sentences.map(s => s.name);
+                    await fetch('/shared/text/add', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-SolRes-Key': SECRET_KEY},
+                        body: JSON.stringify({name, sentences: sentNames, author, created: new Date().toISOString()})
+                    });
+                    showToast('Published: ' + name);
+                });
+            });
         }
-        function closeTutorial() {
-            const overlay = document.getElementById('tutorialOverlay');
-            if (overlay) {
-                overlay.style.display = 'none';
-                localStorage.setItem('solres_tutorial_seen', '1');
-            }
-        }
-        
-           
-        
 
+        // === TUTORIAL ===
+        function showTutorial() { const seen = localStorage.getItem('solres_tutorial_seen'); const overlay = document.getElementById('tutorialOverlay'); if (!seen && overlay) { overlay.style.display = 'flex'; } }
+        function closeTutorial() { const overlay = document.getElementById('tutorialOverlay'); if (overlay) { overlay.style.display = 'none'; localStorage.setItem('solres_tutorial_seen', '1'); } }
+
+        applyLanguage();
         loadSentenceRows();
     </script>
-    
-
-    <!-- TUTORIAL OVERLAY -->
     <div id="tutorialOverlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; align-items:center; justify-content:center;">
         <div style="background:var(--surface); border:1px solid var(--accent); border-radius:16px; padding:30px; max-width:500px; text-align:center; margin:20px;">
-            <h2 style="color:var(--accent); margin-bottom:16px;">🎵 Welcome to SolRes!</h2>
+            <h2 style="color:var(--accent);">🎵 Welcome to SolRes!</h2>
             <div style="text-align:left; line-height:2; font-size:0.9em; color:var(--text);">
                 <p>🔍 <b>Translate</b> — type a word, hear its melody</p>
                 <p>🧩 <b>Compose</b> — build words from 135+ primitives</p>
@@ -688,7 +1002,7 @@ HTML = r"""
                 <p>⚡ <b>Speed slider</b> — adjust playback speed</p>
                 <p>☀️ <b>Theme toggle</b> — switch dark/light mode</p>
             </div>
-            <button class="btn btn-primary" onclick="closeTutorial()" style="margin-top:20px; width:100%;">🚀 Get Started!</button>
+            <button class="btn btn-primary" data-lang="getStarted" onclick="closeTutorial()" style="margin-top:20px; width:100%;">🚀 Get Started!</button>
         </div>
     </div>
     <script>showTutorial();</script>
@@ -700,7 +1014,10 @@ HTML = r"""
 def _build_primitives_rows():
     rows = []
     for e in primitives.primitives.values():
-        rows.append(f"<tr><td><span class='badge'>{e['category']}</span></td><td>{e['ru']}</td><td>{e['en']}</td><td style='font-family:monospace;font-size:0.8em;color:var(--muted);'>{e['pattern']}</td></tr>")
+        rows.append(
+            f"<tr><td><span class='badge'>{e['category']}</span></td><td>{e['ru']}</td><td>{e['en']}</td>"
+            f"<td style='font-family:monospace;font-size:0.8em;color:var(--accent);cursor:pointer;' "
+            f"onclick=\"showPatternInfo('{e['pattern']}')\" title='Click to see intervals'>{e['pattern']}</td></tr>")
     return '\n'.join(rows)
 
 
@@ -708,12 +1025,14 @@ def _build_words_rows():
     rows = []
     for word, data in sorted(descriptors.descriptions.items()):
         desc = ' + '.join(data['ru'])
-        rows.append(f"<tr><td>{word}</td><td>{data['en']}</td><td style='font-size:0.85em;'>{desc}</td><td><button class='btn-sm' onclick='playDictWord(\"{word}\")'>▶</button></td></tr>")
+        rows.append(
+            f"<tr><td>{word}</td><td>{data['en']}</td><td style='font-size:0.85em;'>{desc}</td><td><button class='btn-sm' onclick='playDictWord(\"{word}\")'>▶</button></td></tr>")
     return '\n'.join(rows)
 
 
 def _build_categories_json():
-    import json; cats = {}
+    import json;
+    cats = {}
     for e in primitives.primitives.values():
         cats.setdefault(e['category'], []).append(e['ru'])
     return json.dumps(cats, ensure_ascii=False)
@@ -725,7 +1044,8 @@ def _build_category_order_json():
 
 
 def _build_primitive_info_json():
-    import json; info = {}
+    import json;
+    info = {}
     for e in primitives.primitives.values():
         info[e['ru']] = {'pattern': e['pattern'], 'en': e['en'], 'category': e['category']}
     return json.dumps(info, ensure_ascii=False)
@@ -739,27 +1059,43 @@ def _build_dictionary_words_json():
 @app.route('/')
 def home():
     return render_template_string(HTML,
-        primitives_count=primitives.total_count(), descriptions_count=len(descriptors.descriptions),
-        primitives_rows=_build_primitives_rows(), words_rows=_build_words_rows(),
-        categories_json=_build_categories_json(), category_order_json=_build_category_order_json(),
-        primitive_info_json=_build_primitive_info_json(), dictionary_words_json=_build_dictionary_words_json())
+                                  primitives_count=primitives.total_count(),
+                                  descriptions_count=len(descriptors.descriptions),
+                                  primitives_rows=_build_primitives_rows(), words_rows=_build_words_rows(),
+                                  categories_json=_build_categories_json(),
+                                  category_order_json=_build_category_order_json(),
+                                  primitive_info_json=_build_primitive_info_json(),
+                                  dictionary_words_json=_build_dictionary_words_json(),
+                                  secret_key=SECRET_KEY)
 
 
 @app.route('/translate')
 def translate():
-    word = request.args.get('word', '').strip(); tonic = Note(NoteName.DO, 4)
+    word = request.args.get('word', '').strip();
+    tonic = Note(NoteName.DO, 4)
     desc = descriptors.get_description(word) or descriptors.get_description_en(word)
-    if desc: notes, _ = descriptors.describe_to_notes(word, tonic); meaning = word
+    if desc:
+        notes, _ = descriptors.describe_to_notes(word, tonic); meaning = word
     else:
         prim = primitives.get_by_ru(word) or primitives.get_by_en(word)
-        if prim: notes = descriptors.describe_to_notes(word, tonic)[0]; meaning = prim["ru"] + " / " + prim["en"]; desc = [prim["ru"]]
-        else: return jsonify({'notes': '—', 'meaning': 'not found', 'description': [], 'error': 'Not found'})
+        if prim:
+            notes = descriptors.describe_to_notes(word, tonic)[0]; meaning = prim["ru"] + " / " + prim["en"]; desc = [
+                prim["ru"]]
+        else:
+            return jsonify({'notes': '—', 'meaning': 'not found', 'description': [], 'error': 'Not found'})
     nn = [];
     for n in notes:
-        m = n.to_midi(); s = m % 12
+        m = n.to_midi();
+        s = m % 12
         nn.append(f"{n.name.name}{'♯' if s in SHARP_SEMITONES else ''}{n.octave}")
     return jsonify({'notes': ' → '.join(nn), 'meaning': meaning, 'description': desc})
 
+
+@app.route('/play')
+def play():
+    word = request.args.get('word', '').strip()
+    notes, _ = descriptors.describe_to_notes(word, Note(NoteName.DO, 4))
+    return send_file(generate_word_wav(notes, float(request.args.get('speed', '1.0'))), mimetype='audio/wav')
 
 
 @app.route('/compose')
@@ -767,20 +1103,27 @@ def compose():
     words = [w.strip() for w in request.args.get('words', '').split(',') if w.strip()]
     result = descriptors.validate_order(words)
     if not result["valid"]: return jsonify({'error': '; '.join(result["errors"])})
-    tonic = Note(NoteName.DO, 4); notes = [tonic]; cm = tonic.to_midi(); bo = 4
+    tonic = Note(NoteName.DO, 4);
+    notes = [tonic];
+    cm = tonic.to_midi();
+    bo = 4
     for pw in result["correct_order"]:
         prim = primitives.get_by_ru(pw) or primitives.get_by_en(pw)
         if prim:
             mv = descriptors._pattern_to_movements(prim["pattern"])
             if mv:
-                st, dr = mv[0]; cm += dr * st
+                st, dr = mv[0];
+                cm += dr * st
                 co = (cm // 12) - 1
-                if co > bo + 1: cm -= 12
-                elif co < bo - 1: cm += 12
+                if co > bo + 1:
+                    cm -= 12
+                elif co < bo - 1:
+                    cm += 12
                 notes.append(descriptors._midi_to_note(cm))
     nn = [];
     for n in notes:
-        m = n.to_midi(); s = m % 12
+        m = n.to_midi();
+        s = m % 12
         nn.append(f"{n.name.name}{'♯' if s in SHARP_SEMITONES else ''}{n.octave}")
     return jsonify({'notes': ' → '.join(nn), 'words': result["correct_order"]})
 
@@ -790,16 +1133,22 @@ def compose_play():
     words = [w.strip() for w in request.args.get('words', '').split(',') if w.strip()]
     instrument = request.args.get('instrument', 'piano')
     result = descriptors.validate_order(words)
-    tonic = Note(NoteName.DO, 4); notes = [tonic]; cm = tonic.to_midi(); bo = 4
+    tonic = Note(NoteName.DO, 4);
+    notes = [tonic];
+    cm = tonic.to_midi();
+    bo = 4
     for pw in result["correct_order"]:
         prim = primitives.get_by_ru(pw) or primitives.get_by_en(pw)
         if prim:
             mv = descriptors._pattern_to_movements(prim["pattern"])
             if mv:
-                st, dr = mv[0]; cm += dr * st
+                st, dr = mv[0];
+                cm += dr * st
                 co = (cm // 12) - 1
-                if co > bo + 1: cm -= 12
-                elif co < bo - 1: cm += 12
+                if co > bo + 1:
+                    cm -= 12
+                elif co < bo - 1:
+                    cm += 12
                 notes.append(descriptors._midi_to_note(cm))
     speed = float(request.args.get('speed', '1.0'))
     base_duration = int(400 / speed)
@@ -812,7 +1161,9 @@ def compose_play():
     audio_int16 = (combined * 32767).astype(np.int16)
     buf = io.BytesIO()
     with wave_module.open(buf, 'wb') as wf:
-        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
+        wf.setnchannels(1);
+        wf.setsampwidth(2);
+        wf.setframerate(SAMPLE_RATE)
         wf.writeframes(audio_int16.tobytes())
     buf.seek(0)
     return send_file(buf, mimetype='audio/wav')
@@ -826,7 +1177,9 @@ def piano_note():
     audio_int16 = (w * 32767).astype(np.int16)
     buf = io.BytesIO()
     with wave_module.open(buf, 'wb') as wf:
-        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
+        wf.setnchannels(1);
+        wf.setsampwidth(2);
+        wf.setframerate(SAMPLE_RATE)
         wf.writeframes(audio_int16.tobytes())
     buf.seek(0)
     return send_file(buf, mimetype='audio/wav')
@@ -847,127 +1200,202 @@ def piano_play():
     audio_int16 = (combined * 32767).astype(np.int16)
     buf = io.BytesIO()
     with wave_module.open(buf, 'wb') as wf:
-        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
+        wf.setnchannels(1);
+        wf.setsampwidth(2);
+        wf.setframerate(SAMPLE_RATE)
         wf.writeframes(audio_int16.tobytes())
     buf.seek(0)
     return send_file(buf, mimetype='audio/wav')
 
+
 @app.route('/analyze')
 def analyze():
     intervals = [int(i) for i in request.args.get('intervals', '').split(',') if i.strip()]
-    results = []; all_found = True; primitives_ru = []
+
+    # Определяем направления для всех интервалов
+    directions = []
     for diff in intervals:
-        direction = "UP" if diff > 0 else "DOWN" if diff < 0 else "STATIC"
-        abs_diff = abs(diff); found = None
-        for entry in primitives.primitives.values():
-            for part in entry['pattern'].split(','):
-                if part.endswith("_STATIC"): continue
-                if part.endswith("_UP"): iname = part[:-3]; pdir = "UP"
-                elif part.endswith("_DOWN"): iname = part[:-5]; pdir = "DOWN"
-                else: continue
-                try:
-                    from core.constants import Interval
-                    iv = Interval[iname].value
-                except: iv = None
-                if iv is not None and iv == abs_diff and pdir == direction:
-                    found = {'ru': entry['ru'], 'en': entry['en'], 'found': True}; break
-            if found: break
-        if found: primitives_ru.append(found['ru']); results.append(found)
-        else: all_found = False; results.append({'found': False})
+        if diff > 0:
+            directions.append("UP")
+        elif diff < 0:
+            directions.append("DOWN")
+        else:
+            directions.append("STATIC")
+
+    # Строим строку паттерна из интервалов
+    def interval_to_name(semitones, direction):
+        for name, val in {
+            'UNISON': 0, 'MINOR_SECOND': 1, 'MAJOR_SECOND': 2,
+            'MINOR_THIRD': 3, 'MAJOR_THIRD': 4, 'PERFECT_FOURTH': 5,
+            'TRITON': 6, 'PERFECT_FIFTH': 7, 'MINOR_SIXTH': 8,
+            'MAJOR_SIXTH': 9, 'MINOR_SEVENTH': 10, 'MAJOR_SEVENTH': 11, 'OCTAVE': 12
+        }.items():
+            if val == semitones:
+                return f"{name}_{direction}"
+        return f"UNKNOWN_{direction}"
+
+    played_pattern = ','.join(interval_to_name(abs(intervals[i]), directions[i]) for i in range(len(intervals)))
+
+    # Ищем полное совпадение паттерна
+    results = []
+    all_found = True
+    primitives_ru = []
+
+    # Сначала ищем полное совпадение
+    for entry in primitives.primitives.values():
+        if entry['pattern'] == played_pattern:
+            # Нашли точное совпадение — это одно слово
+            for _ in intervals:
+                results.append({'ru': entry['ru'], 'en': entry['en'], 'found': True})
+                primitives_ru.append(entry['ru'])
+            break
+    else:
+        # Полного совпадения нет — ищем все возможные примитивы для каждого интервала
+        for i, diff in enumerate(intervals):
+            direction = directions[i]
+            abs_diff = abs(diff)
+            found_list = []
+            for entry in primitives.primitives.values():
+                for part in entry['pattern'].split(','):
+                    if part.endswith("_UP"):
+                        iname = part[:-3]; pdir = "UP"
+                    elif part.endswith("_DOWN"):
+                        iname = part[:-5]; pdir = "DOWN"
+                    elif part.endswith("_STATIC"):
+                        iname = part[:-7]; pdir = "STATIC"
+                    else:
+                        continue
+                    try:
+                        from core.constants import Interval
+                        iv = Interval[iname].value
+                    except:
+                        iv = None
+                    if iv is not None and iv == abs_diff and pdir == direction:
+                        found_list.append({'ru': entry['ru'], 'en': entry['en'], 'found': True})
+                        break
+            if found_list:
+                results.append({'found': True, 'options': found_list})
+                primitives_ru.append(' / '.join(f['ru'] for f in found_list))
+            else:
+                all_found = False
+                results.append({'found': False})
+
+    # Ищем слово по полной последовательности
     word_found = None
     if all_found and len(primitives_ru) >= 2:
         for word, data in descriptors.descriptions.items():
-            if data['ru'] == primitives_ru: word_found = word; break
-    return jsonify({'results': results, 'all_found': all_found, 'primitives_ru': primitives_ru, 'word_found': word_found})
+            if data['ru'] == primitives_ru:
+                word_found = word
+                break
 
-
+    return jsonify(
+        {'results': results, 'all_found': all_found, 'primitives_ru': primitives_ru, 'word_found': word_found,
+         'played_pattern': played_pattern})
 
 @app.route('/shared/words')
 def shared_words():
     words = SharedWord.query.order_by(SharedWord.id.desc()).all()
-    return jsonify([{
-        'id': w.id, 'name': w.name,
-        'primitives': w.primitives.split(','),
-        'author': w.author, 'source': w.source,
-        'created': w.created,
-        'likes': w.likes or 0,
-        'dislikes': w.dislikes or 0
-    } for w in words])
+    return jsonify([{'id': w.id, 'name': w.name, 'primitives': w.primitives.split(','), 'author': w.author,
+                     'source': w.source, 'created': w.created, 'likes': w.likes or 0, 'dislikes': w.dislikes or 0} for w
+                    in words])
+
 
 @app.route('/shared/words/add', methods=['POST'])
 def add_shared_word():
     data = request.get_json()
-    # Защита: только запросы с правильным ключом
-    if request.headers.get('X-SolRes-Key') != SECRET_KEY:
-        return jsonify({'error': 'Unauthorized'}), 403
-    w = SharedWord(name=data['name'], primitives=','.join(data['primitives']), author=data.get('author', 'Anonymous'), source=data.get('source', '👤 User'), created=data.get('created', ''))
-    db.session.add(w); db.session.commit()
+    if request.headers.get('X-SolRes-Key') != SECRET_KEY: return jsonify({'error': 'Unauthorized'}), 403
+    w = SharedWord(name=data['name'], primitives=','.join(data['primitives']), author=data.get('author', 'Anonymous'),
+                   source=data.get('source', '👤 User'), created=data.get('created', ''))
+    db.session.add(w);
+    db.session.commit()
     return jsonify({'id': w.id, 'status': 'ok'})
 
 
 @app.route('/shared/words/<int:word_id>/delete', methods=['DELETE'])
 def delete_shared_word(word_id):
-    w = SharedWord.query.get_or_404(word_id)
-    db.session.delete(w); db.session.commit()
+    w = SharedWord.query.get_or_404(word_id);
+    db.session.delete(w);
+    db.session.commit()
     return jsonify({'status': 'ok'})
+
 
 @app.route('/shared/words/<int:word_id>/like', methods=['POST'])
 def like_word(word_id):
-    w = SharedWord.query.get_or_404(word_id)
-    w.likes = (w.likes or 0) + 1
+    w = SharedWord.query.get_or_404(word_id);
+    w.likes = (w.likes or 0) + 1;
     db.session.commit()
     return jsonify({'id': w.id, 'likes': w.likes, 'dislikes': w.dislikes, 'score': (w.likes or 0) - (w.dislikes or 0)})
 
+
 @app.route('/shared/words/<int:word_id>/dislike', methods=['POST'])
 def dislike_word(word_id):
-    w = SharedWord.query.get_or_404(word_id)
-    w.dislikes = (w.dislikes or 0) + 1
+    w = SharedWord.query.get_or_404(word_id);
+    w.dislikes = (w.dislikes or 0) + 1;
     db.session.commit()
-    # Автоудаление при -100
     score = (w.likes or 0) - (w.dislikes or 0)
-    if score <= -100:
-        db.session.delete(w)
-        db.session.commit()
-        return jsonify({'deleted': True, 'score': score})
+    if score <= -100: db.session.delete(w); db.session.commit(); return jsonify({'deleted': True, 'score': score})
     return jsonify({'id': w.id, 'likes': w.likes, 'dislikes': w.dislikes, 'score': score})
+
 
 @app.route('/shared/sentences')
 def shared_sentences():
     sents = SharedSentence.query.order_by(SharedSentence.id.desc()).all()
-    return jsonify([{
-        'id': s.id, 'name': s.name, 'words': s.words.split(','),
-        'author': s.author, 'created': s.created,
-        'likes': s.likes or 0, 'dislikes': s.dislikes or 0
-    } for s in sents])
+    return jsonify([{'id': s.id, 'name': s.name, 'words': s.words.split(','), 'author': s.author, 'created': s.created,
+                     'likes': s.likes or 0, 'dislikes': s.dislikes or 0} for s in sents])
 
-@app.route('/shared/sentences/<int:sent_id>/like', methods=['POST'])
-def like_sentence(sent_id):
-    s = SharedSentence.query.get_or_404(sent_id)
-    s.likes = (s.likes or 0) + 1
-    db.session.commit()
-    return jsonify({'id': s.id, 'likes': s.likes, 'dislikes': s.dislikes, 'score': (s.likes or 0) - (s.dislikes or 0)})
-
-@app.route('/shared/sentences/<int:sent_id>/dislike', methods=['POST'])
-def dislike_sentence(sent_id):
-    s = SharedSentence.query.get_or_404(sent_id)
-    s.dislikes = (s.dislikes or 0) + 1
-    db.session.commit()
-    score = (s.likes or 0) - (s.dislikes or 0)
-    if score <= -100:
-        db.session.delete(s)
-        db.session.commit()
-        return jsonify({'deleted': True, 'score': score})
-    return jsonify({'id': s.id, 'likes': s.likes, 'dislikes': s.dislikes, 'score': score})
 
 @app.route('/shared/sentences/add', methods=['POST'])
 def add_shared_sentence():
     data = request.get_json()
-    if request.headers.get('X-SolRes-Key') != SECRET_KEY:
-        return jsonify({'error': 'Unauthorized'}), 403
-    s = SharedSentence(name=data['name'], words=','.join(data['words']), author=data.get('author', 'Anonymous'), created=data.get('created', ''))
-    db.session.add(s); db.session.commit()
+    if request.headers.get('X-SolRes-Key') != SECRET_KEY: return jsonify({'error': 'Unauthorized'}), 403
+    s = SharedSentence(name=data['name'], words=','.join(data['words']), author=data.get('author', 'Anonymous'),
+                       created=data.get('created', ''))
+    db.session.add(s);
+    db.session.commit()
     return jsonify({'id': s.id, 'status': 'ok'})
 
+
+@app.route('/shared/sentences/<int:sent_id>/like', methods=['POST'])
+def like_sentence(sent_id):
+    s = SharedSentence.query.get_or_404(sent_id);
+    s.likes = (s.likes or 0) + 1;
+    db.session.commit()
+    return jsonify({'id': s.id, 'likes': s.likes, 'dislikes': s.dislikes, 'score': (s.likes or 0) - (s.dislikes or 0)})
+
+
+@app.route('/shared/sentences/<int:sent_id>/dislike', methods=['POST'])
+def dislike_sentence(sent_id):
+    s = SharedSentence.query.get_or_404(sent_id);
+    s.dislikes = (s.dislikes or 0) + 1;
+    db.session.commit()
+    score = (s.likes or 0) - (s.dislikes or 0)
+    if score <= -100: db.session.delete(s); db.session.commit(); return jsonify({'deleted': True, 'score': score})
+    return jsonify({'id': s.id, 'likes': s.likes, 'dislikes': s.dislikes, 'score': score})
+
+@app.route('/shared/text')
+def shared_text():
+    texts = SharedText.query.order_by(SharedText.id.desc()).all()
+    return jsonify([{'id': t.id, 'name': t.name, 'sentences': t.sentences.split('||'), 'author': t.author, 'created': t.created, 'likes': t.likes or 0, 'dislikes': t.dislikes or 0} for t in texts])
+
+@app.route('/shared/text/add', methods=['POST'])
+def add_shared_text():
+    data = request.get_json()
+    if request.headers.get('X-SolRes-Key') != SECRET_KEY: return jsonify({'error': 'Unauthorized'}), 403
+    t = SharedText(name=data['name'], sentences='||'.join(data['sentences']), author=data.get('author', 'Anonymous'), created=data.get('created', ''))
+    db.session.add(t); db.session.commit()
+    return jsonify({'id': t.id, 'status': 'ok'})
+
+@app.route('/shared/text/<int:text_id>/like', methods=['POST'])
+def like_text(text_id):
+    t = SharedText.query.get_or_404(text_id); t.likes = (t.likes or 0) + 1; db.session.commit()
+    return jsonify({'id': t.id, 'likes': t.likes, 'dislikes': t.dislikes, 'score': (t.likes or 0) - (t.dislikes or 0)})
+
+@app.route('/shared/text/<int:text_id>/dislike', methods=['POST'])
+def dislike_text(text_id):
+    t = SharedText.query.get_or_404(text_id); t.dislikes = (t.dislikes or 0) + 1; db.session.commit()
+    score = (t.likes or 0) - (t.dislikes or 0)
+    if score <= -100: db.session.delete(t); db.session.commit(); return jsonify({'deleted': True, 'score': score})
+    return jsonify({'id': t.id, 'likes': t.likes, 'dislikes': t.dislikes, 'score': score})
 
 
 with app.app_context():
