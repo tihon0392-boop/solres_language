@@ -368,6 +368,7 @@ HTML = r"""
             <div class="speed-row"><span>🐢</span><input type="range" id="pianoSpeed" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateSpeedLabel('pianoSpeed','pianoSpeedLabel')"><span>🐇</span><span id="pianoSpeedLabel" style="color:var(--accent);">1.0x</span></div>
             <div class="piano-buttons" style="margin-top:10px;">
                 <button class="btn btn-primary" data-lang="playAnalyze" onclick="pianoPlaySequence()">▶ Play & Analyze</button>
+                <button class="btn btn-sm" data-lang="pause" onclick="pianoAddPause()">⏸ Pause</button>
                 <button class="btn btn-sm" data-lang="undo" onclick="pianoUndoLastNote()">↩ Undo</button>
                 <button class="btn btn-sm" data-lang="clearAll" onclick="pianoClearSequence()">✕ Clear All</button>
                 <button class="btn btn-sm" data-lang="toCompose" onclick="pianoToCompose()">📋 To Compose</button>
@@ -457,7 +458,7 @@ HTML = r"""
     </div>
 
     <script>
-        let theme = 'dark', currentWord = '', pianoOctave = 3, pianoSequence = [], lastAnalysis = null, currentInstrument = 'piano';
+        let theme = 'dark', currentWord = '', pianoOctave = 3, pianoSequence = [], lastAnalysis = null, currentInstrument = 'piano', backspaceTimer = null;
         const CATEGORIES = {{ categories_json | safe }};
         const CATEGORY_ORDER = {{ category_order_json | safe }};
         const PRIMITIVE_INFO = {{ primitive_info_json | safe }};
@@ -466,6 +467,47 @@ HTML = r"""
         const SECRET_KEY = '{{ secret_key | safe }}';
         const NOTE_NAMES = ['C','C#/Db','D','D#/Eb','E','F','F#/Gb','G','G#/Ab','A','A#/Bb','B'];
         const LANG = {
+        
+            primitiveNames: {
+                'я': 'I', 'ты': 'you', 'он': 'he', 'это': 'this', 'быть': 'be',
+                'нечто': 'something', 'ничто': 'nothing', 'всё': 'everything', 'кто-то': 'someone',
+                'большой': 'big', 'маленький': 'small', 'высокий': 'tall', 'низкий': 'low',
+                'широкий': 'wide', 'узкий': 'narrow', 'глубокий': 'deep', 'мелкий': 'shallow',
+                'горячий': 'hot', 'холодный': 'cold', 'твёрдый': 'hard', 'мягкий': 'soft',
+                'тяжёлый': 'heavy', 'лёгкий': 'light', 'острый': 'sharp', 'тупой': 'dull',
+                'быстрый': 'fast', 'медленный': 'slow', 'мокрый': 'wet', 'сухой': 'dry',
+                'гладкий': 'smooth', 'шершавый': 'rough',
+                'светлый': 'bright', 'тёмный': 'dark', 'белый': 'white', 'красный': 'red',
+                'синий': 'blue', 'зелёный': 'green', 'жёлтый': 'yellow', 'фиолетовый': 'purple',
+                'оранжевый': 'orange', 'серый': 'gray',
+                'идти': 'go', 'стоять': 'stand', 'бежать': 'run', 'падать': 'fall',
+                'подниматься': 'rise', 'спускаться': 'descend', 'давать': 'give', 'брать': 'take',
+                'делать': 'do', 'ломать': 'break', 'говорить': 'say', 'молчать': 'be silent',
+                'смотреть': 'see', 'слышать': 'hear', 'думать': 'think', 'чувствовать': 'feel',
+                'жить': 'live', 'умирать': 'die', 'начинать': 'begin', 'заканчивать': 'finish',
+                'менять': 'change', 'сохранять': 'keep',
+                'дерево': 'wood', 'камень': 'stone', 'металл': 'metal', 'вода': 'water',
+                'огонь': 'fire', 'воздух': 'air', 'земля': 'earth', 'стекло': 'glass',
+                'ткань': 'fabric', 'бумага': 'paper',
+                'круглый': 'round', 'квадратный': 'square', 'треугольный': 'triangular',
+                'прямой': 'straight', 'изогнутый': 'curved', 'спиральный': 'spiral',
+                'и': 'and', 'или': 'or', 'для': 'for', 'от': 'from', 'с': 'with',
+                'без': 'without', 'внутри': 'inside', 'снаружи': 'outside', 'над': 'above',
+                'под': 'below', 'рядом': 'near', 'далеко': 'far',
+                'хороший': 'good', 'плохой': 'bad', 'красивый': 'beautiful', 'уродливый': 'ugly',
+                'правильный': 'correct', 'неправильный': 'wrong', 'важный': 'important',
+                'неважный': 'unimportant', 'полезный': 'useful', 'бесполезный': 'useless',
+                'новый': 'new', 'старый': 'old',
+                'один': 'one', 'два': 'two', 'много': 'many', 'мало': 'few',
+                'весь': 'all', 'часть': 'part', 'больше': 'more', 'меньше': 'less',
+                'половина': 'half', 'пустой': 'empty',
+                'здесь': 'here', 'там': 'there', 'впереди': 'ahead', 'сзади': 'behind',
+                'слева': 'left', 'справа': 'right', 'север': 'north', 'юг': 'south',
+                'восток': 'east', 'запад': 'west',
+                'сейчас': 'now', 'тогда': 'then', 'потом': 'later', 'никогда': 'never',
+                'всегда': 'always', 'иногда': 'sometimes', 'день': 'day', 'ночь': 'night',
+                'утро': 'morning', 'вечер': 'evening', 'быстро': 'quickly', 'медленно': 'slowly'
+            },  
         
             categories: {
                 'существование': 'existence',
@@ -516,6 +558,8 @@ HTML = r"""
                 nothingToPublish: 'Нечего публиковать.', select2words: 'Выберите минимум 2 слова',
                 published: 'Опубликовано: ', saved: 'Сохранено: ',
                 ru: 'RU',
+                pause: '⏸ Пауза',
+                note: 'Нота', interval: 'Интервал', primitive: 'Примитив',
                 rule1: '<strong>Алфавит:</strong> 7 нот — <em>До, Ре, Ми, Фа, Соль, Ля, Си</em>',
                 rule2: '<strong>Слова = интервалы</strong> между нотами.',
                 rule3: '<strong>Направление:</strong> Вверх = свет/активность, Вниз = тьма/пассив.',
@@ -559,6 +603,8 @@ HTML = r"""
                 nothingToPublish: 'Nothing to publish.', select2words: 'Select at least 2 words',
                 published: 'Published: ', saved: 'Saved: ',
                 ru: 'RU',
+                pause: '⏸ Pause',
+                note: 'Note', interval: 'Interval', primitive: 'Primitive',
                 rule1: '<strong>Alphabet:</strong> 7 notes — <em>Do, Re, Mi, Fa, Sol, La, Si</em>',
                 rule2: '<strong>Words = intervals</strong> between notes.',
                 rule3: '<strong>Direction:</strong> Up = light/active, Down = dark/passive.',
@@ -576,7 +622,7 @@ HTML = r"""
             applyLanguage();
         }
         function applyLanguage() {
-            // Вкладки и кнопки
+            // Вкладки и кнопки с data-lang
             document.querySelectorAll('[data-lang]').forEach(el => {
                 const value = t(el.dataset.lang);
                 if (value && value.includes('<')) {
@@ -585,23 +631,60 @@ HTML = r"""
                     el.textContent = value;
                 }
             });
+    
+            // Перевод категорий в таблице примитивов
+            const catMap = LANG.categories || {};
+            document.querySelectorAll('#primitivesTable .badge').forEach(badge => {
+                const ruText = badge.textContent.trim();
+                if (currentLang === 'en' && catMap[ruText]) {
+                    badge.textContent = catMap[ruText];
+                } else if (currentLang === 'ru') {
+                    for (const [ru, en] of Object.entries(catMap)) {
+                        if (badge.textContent.trim() === en) badge.textContent = ru;
+                    }
+                }
+            });
+            // Перевод примитивов в выпадающих списках Compose
+            const pn = LANG.primitiveNames || {};
+            document.querySelectorAll('.compose-row .dropdown-list div').forEach(div => {
+                const ruText = div.textContent.trim();
+                if (currentLang === 'en' && pn[ruText]) {
+                    div.textContent = pn[ruText];
+                } else if (currentLang === 'ru') {
+                    for (const [ru, en] of Object.entries(pn)) {
+                        if (div.textContent.trim() === en) div.textContent = ru;
+                    }
+                }
+            });
+    
+            
+    
             // Placeholder-ы
             document.getElementById('wordInput').placeholder = t('typeWord');
             document.getElementById('sentenceName').placeholder = t('sentenceName');
             document.getElementById('composeWordName').placeholder = t('wordName');
             document.getElementById('dictSearch').placeholder = t('search');
+    
             // Кнопка темы
-            document.getElementById('themeBtn').textContent = theme === 'dark' ? t('light') : t('dark');
+            const btn = document.getElementById('themeBtn');
+            if (btn) btn.textContent = t(theme === 'dark' ? 'light' : 'dark');
+    
             // Туториал
             const tut = document.getElementById('tutorialOverlay');
             if (tut) {
                 tut.querySelector('h2').textContent = t('welcome');
-                for (let i = 1; i <= 9; i++) tut.querySelectorAll('p')[i-1].innerHTML = t('tutorial' + i);
-                tut.querySelector('button').textContent = t('getStarted');
+                const ps = tut.querySelectorAll('p');
+                for (let i = 1; i <= 9; i++) {
+                    if (ps[i-1]) ps[i-1].innerHTML = t('tutorial' + i);
+                }
+                const btn2 = tut.querySelector('button');
+                if (btn2) btn2.textContent = t('getStarted');
             }
-            // Placeholder пианино
+    
+            // Пианино placeholder
             const seq = document.getElementById('pianoSequence');
             if (seq && seq.style.color === 'var(--muted)') seq.textContent = t('recordMelody');
+    
             // Заглушки Translate
             const result = document.getElementById('result');
             if (result && result.querySelector('div[style]')) {
@@ -779,38 +862,90 @@ HTML = r"""
         function updatePianoRangeLabel() { const startMidi = (pianoOctave + 1) * 12; const s = NOTE_NAMES[startMidi%12].split('/')[0] + (Math.floor(startMidi/12)-1); const e = NOTE_NAMES[(startMidi+23)%12].split('/')[0] + (Math.floor((startMidi+23)/12)-1); document.getElementById('pianoRangeLabel').textContent = s + ' – ' + e; }
         function pianoShiftOctave(dir) { pianoOctave += dir; if (pianoOctave < 0) pianoOctave = 0; if (pianoOctave > 5) pianoOctave = 5; buildPiano(); }
         async function pianoKeyClick(midi, noteName) { pianoSequence.push({midi, noteName}); updatePianoSequenceDisplay(); const keys = document.querySelectorAll('#piano div[data-midi="' + midi + '"]'); keys.forEach(k => k.classList.add('active')); setTimeout(() => keys.forEach(k => k.classList.remove('active')), 300); const r = await fetch('/piano_note?midi=' + midi + '&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await r.blob())).play(); }
-        function updatePianoSequenceDisplay() { const div = document.getElementById('pianoSequence'); if (pianoSequence.length === 0) { div.textContent = 'Click keys to record a melody...'; div.style.color = 'var(--muted)'; } else { div.innerHTML = pianoSequence.map((s, i) => { const prev = i > 0 ? pianoSequence[i-1] : null; let interval = ''; if (prev) { const diff = s.midi - prev.midi; interval = `<span style="color:var(--muted);font-size:0.7em;"> [${diff>0?'+':''}${diff}]</span>`; } return `<span style="color:var(--accent2);cursor:pointer;" onclick="pianoRemoveNote(${i})" title="Click to remove">${s.noteName}</span>${interval}`; }).join(' → '); div.style.color = ''; } }
+        function updatePianoSequenceDisplay() {
+            const div = document.getElementById('pianoSequence');
+            if (pianoSequence.length === 0) {
+                div.textContent = 'Click keys to record a melody...';
+                div.style.color = 'var(--muted)';
+            } else {
+                div.innerHTML = pianoSequence.map((s, i) => {
+                    if (s.noteName === '⏸') return '<span style="color:var(--accent);">|</span>';
+                    const prev = i > 0 ? pianoSequence[i-1] : null;
+                    let interval = '';
+                    if (prev && prev.noteName !== '⏸') {
+                        const diff = s.midi - prev.midi;
+                        interval = `<span style="color:var(--muted);font-size:0.7em;"> [${diff>0?'+':''}${diff}]</span>`;
+                    }
+                    return `<span style="color:var(--accent2);cursor:pointer;" onclick="pianoRemoveNote(${i})">${s.noteName}</span>${interval}`;
+                }).join(' → ');
+                div.style.color = '';
+            }
+        }
         function pianoUndoLastNote() { pianoSequence.pop(); updatePianoSequenceDisplay(); }
         function pianoRemoveNote(idx) { pianoSequence.splice(idx, 1); updatePianoSequenceDisplay(); }
+        function pianoRemoveNote(idx) { pianoSequence.splice(idx, 1); updatePianoSequenceDisplay(); }
+        function pianoAddPause() { pianoSequence.push({midi: null, noteName: '⏸'}); updatePianoSequenceDisplay(); }
         async function pianoPlaySequence() { if (pianoSequence.length === 0) return; const midis = pianoSequence.map(s => s.midi); for (let i = 0; i < midis.length; i++) { setTimeout(() => { const keys = document.querySelectorAll('#piano div[data-midi="' + midis[i] + '"]'); keys.forEach(k => k.classList.add('active')); setTimeout(() => keys.forEach(k => k.classList.remove('active')), 350); }, i * 400 / getSpeed('pianoSpeed')); } const r = await fetch('/piano_play?notes=' + encodeURIComponent(midis.join(',')) + '&speed=' + getSpeed('pianoSpeed') + '&instrument=' + currentInstrument); const p = document.getElementById('pianoAudio'); p.style.display = 'block'; p.src = URL.createObjectURL(await r.blob()); p.play(); analyzeIntervals(midis); }
-        async function analyzeIntervals(midis) { 
-            if (midis.length < 2) return; 
-            const intervals = []; 
-            for (let i = 1; i < midis.length; i++) intervals.push(midis[i] - midis[i-1]); 
-            const r = await fetch('/analyze?intervals=' + encodeURIComponent(intervals.join(','))); 
-            const data = await r.json(); 
-            lastAnalysis = data; 
-            let html = '<table class="analysis-table"><thead><tr><th>Note</th><th>Interval</th><th>Primitive</th></tr></thead><tbody>'; 
-            for (let i = 0; i < intervals.length; i++) { 
-                const diff = intervals[i], a = data.results[i]; 
-                let found = false;
-                let text = '—';
-                if (a && a.options) {
-                    found = true;
-                    text = a.options.map(o => o.ru).join(' | ');
-                } else if (a && a.found) {
-                    found = true;
-                    text = a.ru + ' (' + a.en + ')';
+        async function analyzeIntervals(midis) {
+            // Разбиваем на группы по паузам (midi === null)
+            const groups = [];
+            let currentGroup = [];
+            for (let i = 0; i < pianoSequence.length; i++) {
+                if (pianoSequence[i].noteName === '⏸') {
+                    if (currentGroup.length >= 2) groups.push(currentGroup);
+                    currentGroup = [];
+                } else {
+                    currentGroup.push(pianoSequence[i].midi);
                 }
-                html += `<tr><td>${pianoSequence[i+1].noteName}</td><td class="${found?'found':'not-found'}">${diff>0?'+':''}${diff}</td><td class="${found?'found':'not-found'}">${text}</td></tr>`; 
-            } 
-            html += '</tbody></table>'; 
-            if (data.word_found) html += `<div class="meaning" style="margin-top:8px;">✅ Word: <strong>${data.word_found}</strong></div>`; 
-            else if (data.all_found) html += `<div class="desc-row" style="margin-top:8px;">Primitives: ${data.primitives_ru.join(' + ')}</div>`; 
-            else html += `<div class="error-msg" style="margin-top:8px;">Some intervals not found.</div>`; 
-            html += `<div style="text-align:center;margin-top:8px;"><button class="btn btn-sm" data-lang="saveAsWord" onclick="savePianoAsWord()">💾 Save as My Word</button></div>`; 
-            document.getElementById('pianoAnalysis').innerHTML = html; 
+            }
+            if (currentGroup.length >= 2) groups.push(currentGroup);
+    
+            if (groups.length === 0) {
+                document.getElementById('pianoAnalysis').innerHTML = '<div class="error-msg">Need at least 2 notes in a group.</div>';
+                return;
+            }
+    
+            let allHtml = '';
+            let allPrimitivesList = [];
+            for (const group of groups) {
+                const intervals = [];
+                for (let i = 1; i < group.length; i++) intervals.push(group[i] - group[i-1]);
+                const r = await fetch('/analyze?intervals=' + encodeURIComponent(intervals.join(',')));
+                const data = await r.json();
+                lastAnalysis = data; 
+                let html = '<table class="analysis-table"><thead><tr><th data-lang="note">Note</th><th data-lang="interval">Interval</th><th data-lang="primitive">Primitive</th></tr></thead><tbody>';
+                for (let i = 0; i < intervals.length; i++) { 
+                    const diff = intervals[i], a = data.results[i]; 
+                    let found = false;
+                    let text = '—';
+                    if (a && a.options) {
+                        found = true;
+                        text = a.options.map(o => {
+                            const name = currentLang === 'en' ? (LANG.primitiveNames[o.ru] || o.en || o.ru) : o.ru;
+                            return name;
+                        }).join(', ');
+                    } else if (a && a.found) {
+                        found = true;
+                        text = currentLang === 'en' ? (LANG.primitiveNames[a.ru] || a.en || a.ru) : a.ru;
+                    }
+                    html += `<tr><td>${pianoSequence[i+1].noteName}</td><td class="${found?'found':'not-found'}">${diff>0?'+':''}${diff}</td><td class="${found?'found':'not-found'}">${text}</td></tr>`; 
+                } 
+                html += '</tbody></table>'; 
+                if (data.word_found) html += `<div class="meaning" style="margin-top:8px;">✅ Word: <strong>${data.word_found}</strong></div>`;
+                else if (data.all_found) {
+                    const prims = data.primitives_ru.map(r => {
+                        return currentLang === 'en' ? (LANG.primitiveNames[r] || r) : r;
+                    }).join(' + ');
+                    html += `<div class="desc-row" style="margin-top:8px;">Primitives: ${prims}</div>`;
+                }
+                else html += `<div class="error-msg" style="margin-top:8px;">Some intervals not found.</div>`; 
+                html += `<div style="text-align:center;margin-top:8px;"><button class="btn btn-sm" data-lang="saveAsWord" onclick="savePianoAsWord()">💾 Save as My Word</button></div>`; 
+                allHtml += html;
+                if (data.primitives_ru) allPrimitivesList = allPrimitivesList.concat(data.primitives_ru);
+            }
+            document.getElementById('pianoAnalysis').innerHTML = allHtml;
         }
+        
         function savePianoAsWord() {
             if (!lastAnalysis || !lastAnalysis.primitives_ru || lastAnalysis.primitives_ru.length < 2) return;
             showPrompt('Word name', 'Enter word name...', function(name) {
@@ -825,7 +960,7 @@ HTML = r"""
         function pianoClearSequence() { pianoSequence = []; updatePianoSequenceDisplay(); document.getElementById('pianoAudio').style.display = 'none'; document.getElementById('pianoAnalysis').innerHTML = ''; document.getElementById('pianoSaveArea').innerHTML = ''; lastAnalysis = null; }
         function pianoToCompose() { if (pianoSequence.length < 2) return; const intervals = []; for (let i = 1; i < pianoSequence.length; i++) intervals.push(pianoSequence[i].midi - pianoSequence[i-1].midi); switchTab('compose'); document.getElementById('composeError').innerHTML = `<div style="color:var(--accent);text-align:center;margin-top:10px;">Intervals from Piano: ${intervals.map(i=>(i>0?'+':'')+i).join(', ')}</div>`; }
         function instrumentChanged() { currentInstrument = document.getElementById('instrumentSelect').value; }
-                // === KEYBOARD BINDINGS ===
+        // === KEYBOARD BINDINGS ===
         const KEY_MAP = {
             'KeyA': 0, 'KeyW': 1, 'KeyS': 2, 'KeyE': 3, 'KeyD': 4,
             'KeyF': 5, 'KeyT': 6, 'KeyG': 7, 'KeyY': 8, 'KeyH': 9,
@@ -833,9 +968,35 @@ HTML = r"""
         };
         
         document.addEventListener('keydown', (e) => {
+            // Блокируем клавиши пианино только если фокус в основных полях сайта
+            const focusedId = e.target.id;
+            if (focusedId === 'wordInput' || focusedId === 'dictSearch' || 
+                focusedId === 'sentenceName' || focusedId === 'composeWordName') return;
             if (e.repeat) return;
+            if (e.code === 'Space') { e.preventDefault(); pianoAddPause(); return; }
             if (e.code === 'ArrowLeft') { pianoShiftOctave(-1); return; }
             if (e.code === 'ArrowRight') { pianoShiftOctave(1); return; }
+            if (e.code === 'Enter') { e.preventDefault(); pianoPlaySequence(); return; }
+            if (e.code === 'KeyP') { e.preventDefault(); pianoAddPause(); return; }
+            if (e.code === 'Backspace') {
+                e.preventDefault();
+                if (!backspaceTimer) {
+                    backspaceTimer = setTimeout(() => {
+                        pianoClearSequence();
+                        backspaceTimer = null;
+                    }, 3000);
+                }
+                return;
+            }
+        document.addEventListener('keyup', (e) => {
+            if (e.code === 'Backspace') {
+                if (backspaceTimer) {
+                    clearTimeout(backspaceTimer);
+                    backspaceTimer = null;
+                    pianoUndoLastNote();
+                }
+            }
+        });
             
             const semitoneOffset = KEY_MAP[e.code];
             if (semitoneOffset !== undefined) {
