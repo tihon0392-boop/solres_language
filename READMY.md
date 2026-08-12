@@ -83,3 +83,12 @@ Thanks to everyone who helped SolRes grow:
 | *Your name here* | *Your contribution* |
 
 Want to be on this list? Propose a word, fix a bug, or contribute code!
+
+---
+
+## 🔗 Links
+
+- **Website:** https://solres.ru
+- **GitHub:** https://github.com/tihon0392-boop/solres_language
+- **Discussions:** https://github.com/tihon0392-boop/solres_language/discussions
+- **Telegram:** https://t.me/solres_language

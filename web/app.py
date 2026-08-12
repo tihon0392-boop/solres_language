@@ -453,6 +453,7 @@ HTML = r"""
                 <li><span data-lang="rule5"><strong>Order:</strong> Existence → Size → Physics → Material → Shape → Color → Action → Relation → Value → Quantity → Space → Time</span></li>
                 <li><span data-lang="rule6"><strong>Flexible:</strong> 2–12 primitives per word.</span></li>
                 <li><span data-lang="rule7"><strong>Community:</strong> <a href="https://github.com/tihon0392-boop/solres_language/discussions" target="_blank" style="color:var(--accent);">GitHub Discussions</a></span></li>
+                <li><span data-lang="rule8"><strong>Telegram:</strong> <a href="https://t.me/solres_language" target="_blank" style="color:var(--accent);">t.me/solres_language</a></span></li>
             </ol>
         </div>
     </div>
@@ -567,6 +568,7 @@ HTML = r"""
                 rule5: '<strong>Порядок:</strong> Существование → Размер → Физика → Материал → Форма → Цвет → Действие → Отношение → Оценка → Количество → Пространство → Время',
                 rule6: '<strong>Гибкость:</strong> 2–12 примитивов на слово.',
                 rule7: '<strong>Сообщество:</strong> <a href="https://github.com/tihon0392-boop/solres_language/discussions" target="_blank" style="color:var(--accent);">GitHub Discussions</a>',
+                rule8: '<strong>Telegram:</strong> <a href="https://t.me/solres_language" target="_blank" style="color:var(--accent);">t.me/solres_language</a>',
             },
             en: {
                 translate: '🔍 Translate', compose: '🧩 Compose', instruments: '🎸 Instruments',
@@ -612,7 +614,7 @@ HTML = r"""
                 rule5: '<strong>Order:</strong> Existence → Size → Physics → Material → Shape → Color → Action → Relation → Value → Quantity → Space → Time',
                 rule6: '<strong>Flexible:</strong> 2–12 primitives per word.',
                 rule7: '<strong>Community:</strong> <a href="https://github.com/tihon0392-boop/solres_language/discussions" target="_blank" style="color:var(--accent);">GitHub Discussions</a>',
-                
+                rule8: '<strong>Telegram:</strong> <a href="https://t.me/solres_language" target="_blank" style="color:var(--accent);">t.me/solres_language</a>',
             }
         };
         let currentLang = 'en';
