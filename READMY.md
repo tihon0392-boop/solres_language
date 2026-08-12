@@ -71,3 +71,15 @@ cd solres_language
 pip install flask numpy sounddevice
 python web/app.py
 ```
+
+---
+
+## 👥 Contributors
+
+Thanks to everyone who helped SolRes grow:
+
+| Name | Contribution |
+|------|--------------|
+| *Your name here* | *Your contribution* |
+
+Want to be on this list? Propose a word, fix a bug, or contribute code!
