@@ -167,6 +167,7 @@ HTML = r"""
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SolRes — Universal Musical Language</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
     <style>
         #tutorialOverlay { display: none; }
         :root { --bg: #020210; --accent: #ff6a00; --accent2: #ff9500; --accent-glow: rgba(255,106,0,0.4); --surface: rgba(12,12,32,0.85); --surface2: rgba(20,20,50,0.9); --green: #00e676; --text: #d0d0e0; --muted: #707090; --red: #ff4757; --radius: 16px; --transition: 0.2s ease; }
@@ -949,11 +950,13 @@ HTML = r"""
         }
         
         function savePianoAsWord() {
-            if (!lastAnalysis || !lastAnalysis.primitives_ru || lastAnalysis.primitives_ru.length < 2) return;
+            if (pianoSequence.length < 2) return;
+            const midiNotes = pianoSequence.filter(s => s.noteName !== '⏸').map(s => s.midi);
+            if (midiNotes.length < 2) return;
             showPrompt('Word name', 'Enter word name...', function(name) {
                 if (!name) return;
                 const myWords = getMyWords();
-                myWords.push({name, primitives: lastAnalysis.primitives_ru, source: '🎹 Instruments', created: new Date().toISOString()});
+                myWords.push({name, midiNotes: midiNotes, source: '🎹 Instruments', created: new Date().toISOString()});
                 saveMyWords(myWords);
                 document.getElementById('pianoSaveArea').innerHTML = '<div class="success-msg">Saved: ' + name + '</div>';
                 showToast('Saved: ' + name);
@@ -1014,15 +1017,28 @@ HTML = r"""
 
         // === MY WORDS ===
         function loadMyWords() { const words = getMyWords(); let html = ''; words.forEach((w, i) => { html += `<tr><td>${w.name}</td><td>${(w.primitives||[]).join(', ')}</td><td><span class="badge ${w.source==='📖 System'?'badge-system':'badge-user'}">${w.source||'?'}</span></td><td><button class="btn-sm" onclick="playMyWord(${i})">▶</button></td><td><button class="btn-sm" onclick="publishMyWord(${i})" title="Publish">🌐</button></td><td><button class="btn-sm btn-danger" onclick="deleteMyWord(${i})">✕</button></td></tr>`; }); document.querySelector('#myWordsTable tbody').innerHTML = html || '<tr><td colspan="6" style="text-align:center;color:var(--muted);">No saved words yet.</td></tr>'; }
-        async function playMyWord(idx) { const words = getMyWords(); if (!words[idx]) return; const ar = await fetch('/compose_play?words=' + encodeURIComponent((words[idx].primitives||[]).join(',')) + '&speed=' + getSpeed('mywordsSpeed') + '&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
+        async function playMyWord(idx) {
+            const words = getMyWords();
+            if (!words[idx]) return;
+            if (words[idx].midiNotes) {
+                const ar = await fetch('/piano_play?notes=' + encodeURIComponent(words[idx].midiNotes.join(',')) + '&speed=' + getSpeed('mywordsSpeed') + '&instrument=' + currentInstrument);
+                new Audio(URL.createObjectURL(await ar.blob())).play();
+            } else {
+                const ar = await fetch('/compose_play?words=' + encodeURIComponent((words[idx].primitives||[]).join(',')) + '&speed=' + getSpeed('mywordsSpeed') + '&instrument=' + currentInstrument);
+                new Audio(URL.createObjectURL(await ar.blob())).play();
+            }
+        }
         async function publishMyWord(idx) {
             const words = getMyWords(); if (!words[idx]) return; const w = words[idx];
             showPrompt('Your name', 'Enter your name...', async function(author) {
                 author = author || 'Anonymous';
+                const body = w.midiNotes 
+                    ? {name: w.name, midi_notes: w.midiNotes, source: w.source, created: w.created, author}
+                    : {name: w.name, primitives: w.primitives, source: w.source, created: w.created, author};
                 await fetch('/shared/words/add', { 
                     method: 'POST', 
                     headers: {'Content-Type': 'application/json', 'X-SolRes-Key': SECRET_KEY}, 
-                    body: JSON.stringify({name: w.name, primitives: w.primitives, source: w.source, created: w.created, author}) 
+                    body: JSON.stringify(body) 
                 });
                 showToast('Published: ' + w.name);
             });
@@ -1075,14 +1091,46 @@ HTML = r"""
         }
         async function voteWord(id, type) { await fetch('/shared/words/'+id+'/'+type, {method:'POST'}); loadCommunityWords(); }
         async function voteSentence(id, type) { await fetch('/shared/sentences/'+id+'/'+type, {method:'POST'}); if (communityTab==='sentences') loadCommunitySentences(); else loadCommunityText(); }
-        async function playCommunityWord(primitives) { const ar = await fetch('/compose_play?words='+encodeURIComponent(primitives)+'&speed='+getSpeed('communitySpeed')+'&instrument='+currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
+        async function playCommunityWord(primitives) {
+            // Если primitives выглядят как числа (MIDI) — играем через piano_play
+            const isMidi = primitives.split(',').every(p => !isNaN(parseInt(p)));
+            if (isMidi) {
+                const ar = await fetch('/piano_play?notes=' + encodeURIComponent(primitives) + '&speed=' + getSpeed('communitySpeed') + '&instrument=' + currentInstrument);
+                new Audio(URL.createObjectURL(await ar.blob())).play();
+            } else {
+                const ar = await fetch('/compose_play?words=' + encodeURIComponent(primitives) + '&speed=' + getSpeed('communitySpeed') + '&instrument=' + currentInstrument);
+                new Audio(URL.createObjectURL(await ar.blob())).play();
+            }
+        }
         async function playCommunitySentence(wordsStr) { const ar = await fetch('/compose_play?words='+encodeURIComponent(wordsStr)+'&speed='+getSpeed('communitySpeed')+'&instrument='+currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
 
         // === SENTENCES ===
         function getAllWordsForSelect() { const myWords = getMyWords(); const dictWords = Object.entries(DICTIONARY_WORDS).map(([name, data]) => ({name, primitives: data.ru, source: '📖 System'})); return [...dictWords, ...myWords]; }
         function loadSentenceRows() { document.getElementById('sentenceRows').innerHTML = ''; addSentenceRow(); }
         function addSentenceRow() { const allWords = getAllWordsForSelect(); const container = document.getElementById('sentenceRows'); const row = document.createElement('div'); row.className = 'sentence-row'; row.draggable = true; row.innerHTML = `<span class="drag-handle" draggable="true">⋮⋮</span><div class="dropdown-search"><input type="text" placeholder="🔍 Search word..." onfocus="toggleDropdown(this, true)" oninput="filterDropdown(this)" onblur="setTimeout(()=>toggleDropdown(this,false),200)"><div class="dropdown-list"></div></div><button class="btn-sm btn-danger" onclick="this.parentElement.remove()">✕</button>`; row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', Array.from(container.children).indexOf(row)); row.classList.add('dragging'); }); row.addEventListener('dragend', () => row.classList.remove('dragging')); row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag-over'); }); row.addEventListener('dragleave', () => row.classList.remove('drag-over')); row.addEventListener('drop', (e) => { e.preventDefault(); row.classList.remove('drag-over'); const from = parseInt(e.dataTransfer.getData('text/plain')); const to = Array.from(container.children).indexOf(row); if (from !== to && from >= 0 && to >= 0) { container.insertBefore(container.children[from], container.children[to + (from < to ? 1 : 0)]); } }); container.appendChild(row); buildDropdown(row.querySelector('.dropdown-list'), allWords.map(w => w.name), row.querySelector('input')); }
-        async function playSentence() { const allWords = getAllWordsForSelect(); const selected = []; document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => { if (inp.value) { const w = allWords.find(aw => aw.name === inp.value); if (w) selected.push(w.primitives || []); } }); const allPrims = selected.flat(); if (allPrims.length === 0) return; const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('sentSpeed')); const p = document.getElementById('sentenceAudio'); p.style.display = 'block'; p.src = URL.createObjectURL(await ar.blob()); p.play(); }
+        async function playSentence() { 
+            const allWords = getAllWordsForSelect(); 
+            const selected = []; 
+            document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => { 
+                if (inp.value) { 
+                    const w = allWords.find(aw => aw.name === inp.value); 
+                    if (w) selected.push(w); 
+                } 
+            }); 
+            if (selected.length === 0) return; 
+            const midiNotes = selected.flatMap(w => w.midiNotes || []);
+            let ar;
+            if (midiNotes.length >= 2) {
+                ar = await fetch('/piano_play?notes=' + encodeURIComponent(midiNotes.join(',')) + '&speed=' + getSpeed('sentSpeed') + '&instrument=' + currentInstrument);
+            } else {
+                const allPrims = selected.flatMap(w => w.primitives || []);
+                ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('sentSpeed') + '&instrument=' + currentInstrument);
+            }
+            const p = document.getElementById('sentenceAudio'); 
+            p.style.display = 'block'; 
+            p.src = URL.createObjectURL(await ar.blob()); 
+            p.play(); 
+        }
         function saveSentence() { const name = document.getElementById('sentenceName').value.trim() || 'sentence_' + Date.now(); const wordNames = []; document.querySelectorAll('#sentenceRows .dropdown-search input').forEach(inp => { if (inp.value) wordNames.push(inp.value); }); if (wordNames.length < 2) return; const sentences = getSentences(); sentences.push({name, words: wordNames, created: new Date().toISOString()}); saveSentences(sentences); document.getElementById('sentenceName').value = ''; showToast('Saved: ' + name); }
         async function publishSentence() {
             const name = document.getElementById('sentenceName').value.trim() || 'sentence_' + Date.now();
@@ -1113,17 +1161,38 @@ HTML = r"""
             const sentences = getSentences(); 
             if (sentences.length === 0) return; 
             const allWords = getAllWordsForSelect(); 
-            for (const s of sentences) { 
-                const words = s.words.map(name => allWords.find(w => w.name === name)).filter(Boolean); 
-                if (words.length === 0) continue; 
-                const allPrims = words.flatMap(w => w.primitives || []); 
-                const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed') + '&instrument=' + currentInstrument); 
-                const a = new Audio(URL.createObjectURL(await ar.blob())); 
-                a.play(); 
-                await new Promise(r => { a.onended = r; }); 
-            } 
+            for (const s of sentences) {
+                const words = s.words.map(name => allWords.find(w => w.name === name)).filter(Boolean);
+                if (words.length === 0) continue;
+                const midiNotes = words.flatMap(w => w.midiNotes || []);
+                let ar;
+                if (midiNotes.length >= 2) {
+                    ar = await fetch('/piano_play?notes=' + encodeURIComponent(midiNotes.join(',')) + '&speed=' + getSpeed('textSpeed') + '&instrument=' + currentInstrument);
+                } else {
+                    const allPrims = words.flatMap(w => w.primitives || []);
+                    ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed') + '&instrument=' + currentInstrument);
+                }
+                const a = new Audio(URL.createObjectURL(await ar.blob()));
+                a.play();
+                await new Promise(r => { a.onended = r; });
+            }
         }
-        async function playTextSentence(idx) { const sentences = getSentences(); if (!sentences[idx]) return; const allWords = getAllWordsForSelect(); const words = sentences[idx].words.map(name => allWords.find(w => w.name === name)).filter(Boolean); if (words.length === 0) return; const allPrims = words.flatMap(w => w.primitives || []); const ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed') + '&instrument=' + currentInstrument); new Audio(URL.createObjectURL(await ar.blob())).play(); }
+        async function playTextSentence(idx) { 
+            const sentences = getSentences(); 
+            if (!sentences[idx]) return; 
+            const allWords = getAllWordsForSelect(); 
+            const words = sentences[idx].words.map(name => allWords.find(w => w.name === name)).filter(Boolean); 
+            if (words.length === 0) return; 
+            const midiNotes = words.flatMap(w => w.midiNotes || []);
+            let ar;
+            if (midiNotes.length >= 2) {
+                ar = await fetch('/piano_play?notes=' + encodeURIComponent(midiNotes.join(',')) + '&speed=' + getSpeed('textSpeed') + '&instrument=' + currentInstrument);
+            } else {
+                const allPrims = words.flatMap(w => w.primitives || []);
+                ar = await fetch('/compose_play?words=' + encodeURIComponent(allPrims.join(',')) + '&speed=' + getSpeed('textSpeed') + '&instrument=' + currentInstrument);
+            }
+            new Audio(URL.createObjectURL(await ar.blob())).play(); 
+        }
         function deleteTextSentence(idx) { const s = getSentences(); s.splice(idx, 1); saveSentences(s); loadText(); }
         function clearText() { if (confirm('Delete all?')) { saveSentences([]); loadText(); } }
         async function publishText() {
@@ -1462,15 +1531,15 @@ def shared_words():
                      'source': w.source, 'created': w.created, 'likes': w.likes or 0, 'dislikes': w.dislikes or 0} for w
                     in words])
 
-
 @app.route('/shared/words/add', methods=['POST'])
 def add_shared_word():
     data = request.get_json()
     if request.headers.get('X-SolRes-Key') != SECRET_KEY: return jsonify({'error': 'Unauthorized'}), 403
-    w = SharedWord(name=data['name'], primitives=','.join(data['primitives']), author=data.get('author', 'Anonymous'),
-                   source=data.get('source', '👤 User'), created=data.get('created', ''))
-    db.session.add(w);
-    db.session.commit()
+    if 'midi_notes' in data:
+        w = SharedWord(name=data['name'], primitives=','.join(map(str, data['midi_notes'])), author=data.get('author', 'Anonymous'), source=data.get('source', 'User'), created=data.get('created', ''))
+    else:
+        w = SharedWord(name=data['name'], primitives=','.join(data['primitives']), author=data.get('author', 'Anonymous'), source=data.get('source', 'User'), created=data.get('created', ''))
+    db.session.add(w); db.session.commit()
     return jsonify({'id': w.id, 'status': 'ok'})
 
 
