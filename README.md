@@ -12,7 +12,7 @@
 
 ## 🌐 Live Demo
 
-**https://solres.ru**
+https://solres.ru
 
 Translate words, compose melodies, play piano, build sentences — all in your browser.
 
